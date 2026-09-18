@@ -13,7 +13,7 @@ export interface Sector {
   updated_at: string;
 }
 
-export type Stage = 'lobby' | 'trivia' | 'truefalse' | 'speech' | 'leaderboard' | 'end';
+export type Stage = 'title' | 'boarding' | 'trivia' | 'truefalse' | 'speech' | 'leaderboard' | 'end';
 
 export interface GameState {
   id: number;

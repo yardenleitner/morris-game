@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useLiveGame } from '@/lib/useLiveGame';
+import { IconClock } from '@/lib/icons';
 import { SectorId, SECTOR_IDS } from '@/lib/types';
 
 const STORAGE_KEY = 'morris-sector';
@@ -20,30 +21,30 @@ export default function PlayPage() {
     if (saved) setMySector(saved as SectorId);
   }, []);
 
-  useEffect(() => {
-    setVoted(false);
-  }, [game?.round_id]);
+  useEffect(() => { setVoted(false); }, [game?.round_id]);
 
-  if (loading || !game) {
-    return <Centered>טוען...</Centered>;
-  }
+  if (loading || !game) return <Centered>טוען...</Centered>;
 
   const me = sectors.find((s) => s.id === mySector);
 
   if (!mySector || !me) {
     return (
-      <main className="flex-1 flex flex-col items-center justify-center gap-6 p-6 text-center">
-        <h1 className="text-3xl font-black gold-text">מי מכיר את מוריס?</h1>
-        <p className="text-[var(--muted)]">בחר/י את המדור שלך</p>
-        <div className="grid grid-cols-2 gap-3 w-full max-w-sm">
+      <main className="flex-1 flex flex-col p-6 gap-5">
+        <div className="text-center pt-4">
+          <div className="text-xs font-extrabold text-[var(--gold)] tracking-widest">מי מכיר</div>
+          <div className="text-2xl font-black text-[var(--gold)] -mt-0.5">מוריס?</div>
+        </div>
+        <p className="text-[var(--muted)] text-center">בחר/י את המדור שלך</p>
+        <div className="grid grid-cols-2 gap-3">
           {SECTOR_IDS.map((id) => {
             const s = sectors.find((x) => x.id === id);
+            const picked = pickedSector === id;
             return (
               <button
                 key={id}
                 onClick={() => setPickedSector(id)}
-                style={{ borderColor: s?.color, background: pickedSector === id ? s?.color : 'transparent' }}
-                className="rounded-xl border-2 py-6 text-xl font-bold transition-colors"
+                style={{ borderColor: s?.color, background: picked ? s?.color : 'transparent', color: picked ? '#fff' : s?.color }}
+                className="rounded-2xl border-2 py-7 text-xl font-extrabold transition-colors"
               >
                 {s?.name ?? id}
               </button>
@@ -51,12 +52,12 @@ export default function PlayPage() {
           })}
         </div>
         {pickedSector && (
-          <div className="w-full max-w-sm flex flex-col gap-3">
+          <div className="flex flex-col gap-3 mt-1 pop-in">
             <input
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
               placeholder="השם שלך"
-              className="rounded-xl bg-[var(--panel)] border border-white/10 px-4 py-3 text-center text-lg"
+              className="rounded-xl bg-[#0c1642] border border-[#5367a9] px-4 py-3.5 text-center text-lg"
             />
             <button
               disabled={!nameInput.trim() || joining}
@@ -67,7 +68,7 @@ export default function PlayPage() {
                 setMySector(pickedSector);
                 setJoining(false);
               }}
-              className="rounded-xl bg-gradient-to-l from-[var(--gold)] to-[var(--orange)] text-[#1a1330] font-black py-4 text-lg disabled:opacity-40"
+              className="btn gold py-4 text-lg disabled:opacity-40"
             >
               {joining ? 'מצטרף...' : 'הצטרף למשחק'}
             </button>
@@ -82,12 +83,11 @@ export default function PlayPage() {
   const lockedSectorName = otherLocked ? sectors.find((s) => s.id === game.buzzer_locked_by)?.name : null;
   const excluded = game.round_excluded.includes(mySector);
   const canBuzz = game.stage === 'trivia' && game.buzzer_open && !game.buzzer_locked_by && !excluded && !me.disqualified;
-
   const alreadyVoted = game.current_votes[mySector] !== undefined;
 
   return (
-    <main className="flex-1 flex flex-col items-center gap-6 p-5 text-center" style={{ boxShadow: `inset 0 8px 0 ${me.color}` }}>
-      <header className="w-full flex items-center justify-between pt-2">
+    <main className="flex-1 flex flex-col" style={{ boxShadow: `inset 0 8px 0 ${me.color}` }}>
+      <header className="flex items-center justify-between px-5 pt-6">
         <div className="text-right">
           <div className="font-black text-lg" style={{ color: me.color }}>{me.name}</div>
           <div className="text-sm text-[var(--muted)]">{me.rep_name}</div>
@@ -98,24 +98,21 @@ export default function PlayPage() {
         </div>
       </header>
 
-      {me.disqualified && (
-        <BigMsg color="#e8452c">הופסקת מהמשחק ע״י המנחה</BigMsg>
-      )}
+      {me.disqualified && <BigMsg color="#ee6d75">הופסקת מהמשחק ע״י המנחה</BigMsg>}
 
-      {!me.disqualified && game.stage === 'lobby' && (
-        <BigMsg color="var(--muted)">ממתינים למנחה שיתחיל את המשחק...</BigMsg>
+      {!me.disqualified && (game.stage === 'title' || game.stage === 'boarding') && (
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8 text-center">
+          <IconClock />
+          <div className="text-[var(--muted)] text-lg font-bold">ממתינים למנחה שיתחיל את השלב הבא...</div>
+        </div>
       )}
 
       {!me.disqualified && game.stage === 'trivia' && (
-        <div className="flex-1 flex flex-col items-center justify-center gap-6 w-full">
+        <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6 text-center">
           {iAmLocked && <BigMsg color="var(--gold)">אתה ראשון — ענה עכשיו!</BigMsg>}
-          {otherLocked && <BigMsg color="var(--muted)">{lockedSectorName} לחץ ראשון</BigMsg>}
-          {!game.buzzer_open && !game.buzzer_locked_by && (
-            <p className="text-[var(--muted)] text-lg">הבאזר סגור — המתן/י למנחה</p>
-          )}
-          {excluded && !game.buzzer_locked_by && (
-            <p className="text-[var(--muted)] text-lg">נפסלת בסיבוב הזה — המתן/י לשאלה הבאה</p>
-          )}
+          {otherLocked && <BigMsg color="var(--muted)">{lockedSectorName} לחץ/ה ראשון/ה</BigMsg>}
+          {!game.buzzer_open && !game.buzzer_locked_by && <p className="text-[var(--muted)] text-lg">הבאזר סגור — המתן/י למנחה</p>}
+          {excluded && !game.buzzer_locked_by && <p className="text-[var(--muted)] text-lg">נפסלת בסיבוב הזה — המתן/י לשאלה הבאה</p>}
           <button
             disabled={!canBuzz || pressing}
             onClick={async () => {
@@ -123,10 +120,16 @@ export default function PlayPage() {
               await supabase.rpc('press_buzzer', { p_sector_id: mySector, p_round_id: game.round_id });
               setPressing(false);
             }}
-            className={`w-56 h-56 rounded-full font-black text-3xl shadow-2xl transition-all ${
-              canBuzz ? 'buzz-open' : 'opacity-30'
-            }`}
-            style={{ background: canBuzz ? `radial-gradient(circle at 35% 30%, ${me.color}, #000)` : '#333' }}
+            className="rounded-full font-black text-3xl disabled:opacity-30"
+            style={{
+              width: 'min(280px,68vw)', aspectRatio: '1',
+              background: iAmLocked
+                ? 'radial-gradient(circle at 35% 28%,#fff3c8,#f5c451 62%,#b9860f)'
+                : 'radial-gradient(circle at 35% 28%,#ffecb7,#ea7c19 62%,#87310f)',
+              boxShadow: canBuzz ? '0 0 0 12px #f8af3825,0 0 0 22px #f8af3815,0 14px 0 #70220e,0 22px 40px #000b' : '0 14px 0 #1c1c1c,0 22px 40px #000b',
+              color: '#351300',
+              filter: canBuzz || iAmLocked ? 'none' : 'grayscale(1)',
+            }}
           >
             באזר
           </button>
@@ -134,27 +137,23 @@ export default function PlayPage() {
       )}
 
       {!me.disqualified && game.stage === 'truefalse' && (
-        <div className="flex-1 flex flex-col items-center justify-center gap-6 w-full">
-          <p className="text-xl leading-relaxed">{game.current_story_text}</p>
+        <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6 text-center">
+          <div className="bg-[#101b52] border border-[#526cbb] rounded-2xl px-5 py-4 text-lg leading-relaxed">{game.current_story_text}</div>
           {alreadyVoted || voted ? (
             <p className="text-[var(--gold)] text-lg font-bold">ההצבעה נשלחה — ממתינים לשאר המדורים</p>
           ) : (
-            <div className="flex gap-4 w-full">
+            <div className="flex gap-3.5 w-full">
               <button
-                onClick={async () => {
-                  setVoted(true);
-                  await supabase.rpc('submit_vote', { p_sector_id: mySector, p_round_id: game.round_id, p_vote: true });
-                }}
-                className="flex-1 rounded-2xl bg-green-600 py-8 text-2xl font-black"
+                onClick={async () => { setVoted(true); await supabase.rpc('submit_vote', { p_sector_id: mySector, p_round_id: game.round_id, p_vote: true }); }}
+                className="flex-1 rounded-2xl py-9 text-2xl font-black"
+                style={{ background: '#16522b', color: '#7bda92' }}
               >
                 קרה
               </button>
               <button
-                onClick={async () => {
-                  setVoted(true);
-                  await supabase.rpc('submit_vote', { p_sector_id: mySector, p_round_id: game.round_id, p_vote: false });
-                }}
-                className="flex-1 rounded-2xl bg-red-600 py-8 text-2xl font-black"
+                onClick={async () => { setVoted(true); await supabase.rpc('submit_vote', { p_sector_id: mySector, p_round_id: game.round_id, p_vote: false }); }}
+                className="flex-1 rounded-2xl py-9 text-2xl font-black"
+                style={{ background: '#5c1a1a', color: '#ff9d9d' }}
               >
                 לא קרה
               </button>
@@ -163,13 +162,8 @@ export default function PlayPage() {
         </div>
       )}
 
-      {!me.disqualified && game.stage === 'speech' && (
-        <BigMsg color="var(--gold)">שלב נאומי הפרידה — עקבו אחרי המסך הגדול</BigMsg>
-      )}
-
-      {!me.disqualified && (game.stage === 'leaderboard' || game.stage === 'end') && (
-        <BigMsg color="var(--gold)">תודה שלקחת חלק! עקבו אחרי לוח המובילים על המסך</BigMsg>
-      )}
+      {!me.disqualified && game.stage === 'speech' && <BigMsg color="var(--gold)">שלב נאומי הפרידה — עקבו אחרי המסך הגדול</BigMsg>}
+      {!me.disqualified && (game.stage === 'leaderboard' || game.stage === 'end') && <BigMsg color="var(--gold)">תודה שלקחת חלק! עקבו אחרי המסך הגדול</BigMsg>}
     </main>
   );
 }
@@ -180,8 +174,8 @@ function Centered({ children }: { children: React.ReactNode }) {
 
 function BigMsg({ children, color }: { children: React.ReactNode; color: string }) {
   return (
-    <div className="pop-in text-2xl font-black" style={{ color }}>
-      {children}
+    <div className="flex-1 flex items-center justify-center px-8">
+      <div className="pop-in text-2xl font-black text-center" style={{ color }}>{children}</div>
     </div>
   );
 }

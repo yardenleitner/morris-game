@@ -1,26 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #0b0a1a;
-  --bg2: #14122b;
-  --panel: #1b1836;
-  --gold: #f5c451;
-  --orange: #f5a623;
-  --text: #f3f1ff;
-  --muted: #a29fc4;
+  --ink:#050a22; --panel:#0d1647; --line:#5871c8;
+  --gold:#ffcf63; --gold2:#eb9b2a; --blue:#58a9ff; --muted:#aebbe8;
 }
 
 @theme inline {
-  --color-bg: var(--bg);
+  --color-ink: var(--ink);
   --color-panel: var(--panel);
   --color-gold: var(--gold);
-  --color-orange: var(--orange);
+  --color-orange: var(--gold2);
   --font-sans: var(--font-heebo);
 }
 
 html, body {
-  background: radial-gradient(circle at 50% -10%, #241f4a 0%, var(--bg) 55%, #05040c 100%);
-  color: var(--text);
+  background: radial-gradient(ellipse at 50% -10%,#243e94 0%,transparent 35%),radial-gradient(ellipse at 10% 100%,#182b72 0%,transparent 38%),var(--ink);
+  color: #fff;
   min-height: 100dvh;
 }
 
@@ -29,28 +24,70 @@ body {
 }
 
 .gold-text {
-  background: linear-gradient(90deg, var(--gold), var(--orange));
+  background: linear-gradient(135deg,#fff6da,var(--gold) 45%,var(--gold2));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/* the rounded "broadcast" card used on every screen-role view */
+.screen-card {
+  border: 1px solid #4669b8;
+  border-radius: 24px;
+  background: linear-gradient(140deg,#101b54e8,#070d2edf);
+  box-shadow: 0 20px 80px #000a, inset 0 0 70px #1c389766;
+  position: relative;
+  overflow: hidden;
+}
+
+.host-card {
+  background: #0a1238b8;
+  border: 1px solid #344c99;
+  border-radius: 18px;
+}
+
+.btn {
+  font: inherit;
+  color: #eaf0ff;
+  background: transparent;
+  border: 1px solid #5367a9;
+  border-radius: 999px;
+  padding: 12px 18px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.btn.gold {
+  color: #201305;
+  border-color: #ffd878;
+  background: linear-gradient(135deg,#fff0a9,var(--gold2));
+  font-weight: 800;
+}
+.btn.blue { border-color:#57a9fa; background:#1969b566; }
+.btn.danger { border-color:#ee6d75; color:#ffb5b9; }
+.btn.done { color:#7bda92; border-color:#2f5c3d; }
+.btn:disabled { opacity:.35; cursor:not-allowed; }
+
+.live-dot {
+  display:inline-flex; align-items:center; gap:6px; color:#7bda92; font-weight:700; font-size:14px;
+}
+.live-dot i {
+  width:8px; height:8px; border-radius:50%; background:#7bda92; box-shadow:0 0 8px #7bda92; display:inline-block;
 }
 
 @keyframes buzz-pulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.05); }
 }
-.buzz-open {
-  animation: buzz-pulse 0.9s ease-in-out infinite;
-}
+.buzz-open { animation: buzz-pulse 0.9s ease-in-out infinite; }
 
 @keyframes pop-in {
-  from { opacity: 0; transform: scale(0.85); }
+  from { opacity: 0; transform: scale(0.9); }
   to { opacity: 1; transform: scale(1); }
 }
 .pop-in { animation: pop-in 0.35s ease-out; }
 
 @keyframes flash-bg {
-  0% { background-color: rgba(245, 196, 81, 0.35); }
+  0% { background-color: rgba(255, 207, 99, 0.35); }
   100% { background-color: transparent; }
 }
 .flash { animation: flash-bg 1.2s ease-out; }

@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { HOST_KEY } from '@/lib/supabaseClient';
 import { TriviaQuestion, TrueFalseStory, SpeechWord } from '@/lib/types';
+import { IconX } from '@/lib/icons';
 
 const headers = { 'x-host-key': HOST_KEY, 'Content-Type': 'application/json' };
 
@@ -33,7 +34,7 @@ export default function ContentPage() {
     <main className="flex-1 p-4 md:p-6 flex flex-col gap-8 max-w-4xl mx-auto w-full">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-black gold-text">עריכת תוכן</h1>
-        <Link href="/host" className="rounded-lg bg-[var(--panel)] border border-white/10 px-3 py-2 text-sm">חזרה למנחה</Link>
+        <Link href="/host" className="btn text-sm">חזרה למנחה</Link>
       </header>
 
       <QuestionsEditor questions={questions} reload={load} />
@@ -149,7 +150,7 @@ function WordsEditor({ words, reload }: { words: SpeechWord[]; reload: () => voi
               onBlur={(e) => api('PUT', { table: 'words', id: w.id, data: { word: e.target.value } })}
               className="bg-black/30 rounded px-2 py-1 w-32"
             />
-            <button onClick={() => api('DELETE', undefined, `?table=words&id=${w.id}`).then(reload)} className="text-xs text-red-400">✕</button>
+            <button onClick={() => api('DELETE', undefined, `?table=words&id=${w.id}`).then(reload)} className="text-red-400"><IconX size={13} /></button>
           </div>
         ))}
       </div>
