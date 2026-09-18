@@ -53,6 +53,14 @@ export function IconTrophy({ size = 56 }: { size?: number }) {
   );
 }
 
+export function IconPlus({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function IconClock({ size = 46 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ opacity: 0.6 }}>
