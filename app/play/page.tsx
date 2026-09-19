@@ -78,10 +78,14 @@ export default function PlayPage() {
               disabled={!nameInput.trim() || joining}
               onClick={async () => {
                 setJoining(true);
-                await supabase.rpc('join_sector', { p_sector_id: pickedSector, p_name: nameInput.trim() });
+                const { error } = await supabase.rpc('join_sector', { p_sector_id: pickedSector, p_name: nameInput.trim() });
+                setJoining(false);
+                if (error) {
+                  alert(`ההצטרפות נכשלה, נסו שוב (${error.message})`);
+                  return;
+                }
                 localStorage.setItem(STORAGE_KEY, pickedSector);
                 setMySector(pickedSector);
-                setJoining(false);
               }}
               className="btn gold py-4 text-lg disabled:opacity-40"
             >
