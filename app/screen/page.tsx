@@ -1,6 +1,7 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import confetti from 'canvas-confetti';
 import { useLiveGame } from '@/lib/useLiveGame';
 import { IconStar, IconTrophy } from '@/lib/icons';
 import { Sector } from '@/lib/types';
@@ -14,6 +15,7 @@ export default function ScreenPage() {
 
   if (game.stage === 'title') return <TitleScreen />;
   if (game.stage === 'boarding') return <BoardingScreen sectors={sectors} />;
+  if (game.stage === 'rules') return <RulesScreen />;
   if (game.stage === 'end') return <WinnerScreen sectors={sectors} />;
 
   return (
@@ -77,6 +79,30 @@ function BoardingScreen({ sectors }: { sectors: Sector[] }) {
   );
 }
 
+function RulesScreen() {
+  const rules = [
+    { title: 'סבב טריוויה', body: 'הבאזר נפתח עם כל שאלה. מי שלוחצ/ת ראשון/ה עונה בקול. תשובה נכונה: 100+ נקודות. תשובה שגויה: 100- נקודות, והבאזר נפתח שוב לשאר המדורים.' },
+    { title: 'קרה / לא קרה', body: 'כל מדור מצביע מהטלפון — "קרה" או "לא קרה" — לפני שנגמרות 15 השניות. אותו ניקוד: 100+ על תשובה נכונה, 100- על תשובה שגויה.' },
+    { title: 'נאומי הפרידה · מילות מוקש', body: 'בסבב האחרון כל דובר/ת מקבל/ת מילה שחייבים לשלב בנאום בלי שישימו לב.' },
+  ];
+  return (
+    <main className="flex-1 flex flex-col items-center justify-center gap-8 p-10">
+      <div className="text-center">
+        <div className="text-sm font-extrabold text-[var(--gold)] tracking-widest">מי מכיר את מוריס?</div>
+        <h1 className="mt-1 text-3xl md:text-4xl font-extrabold">חוקי המשחק</h1>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-5xl w-full">
+        {rules.map((r) => (
+          <div key={r.title} className="rounded-2xl p-6" style={{ background: '#0c1642cc', border: '1px solid #4d64aa' }}>
+            <div className="font-black text-lg text-[var(--gold)] mb-2">{r.title}</div>
+            <p className="text-[var(--muted)] leading-relaxed">{r.body}</p>
+          </div>
+        ))}
+      </div>
+    </main>
+  );
+}
+
 function WinnerScreen({ sectors }: { sectors: Sector[] }) {
   const ranked = [...sectors].sort((a, b) => b.score - a.score);
   const winner = ranked[0];
@@ -125,6 +151,17 @@ function LiveHeader({ left }: { left: string }) {
 function Trivia({ game, sectors }: { game: any; sectors: Sector[] }) {
   const locked = sectors.find((s) => s.id === game.buzzer_locked_by);
   const revealed = game.revealed_correct_index !== null;
+  const awarded = sectors.find((s) => s.id === game.winner_sector_id);
+  const firedFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    const key = `${game.current_question_id}:${game.winner_sector_id}`;
+    if (game.last_award_correct === true && firedFor.current !== key) {
+      firedFor.current = key;
+      confetti({ particleCount: 160, spread: 80, origin: { y: 0.5 }, colors: ['#ffcf63', '#eb9b2a', '#58a9ff', '#ffffff'] });
+    }
+  }, [game.current_question_id, game.winner_sector_id, game.last_award_correct]);
+
   return (
     <Card>
       <LiveHeader left="סבב טריוויה" />
@@ -154,14 +191,24 @@ function Trivia({ game, sectors }: { game: any; sectors: Sector[] }) {
         </div>
       )}
       <div className="text-center mt-5 h-12">
-        {locked && !revealed && (
+        {locked && game.last_award_correct === null && (
           <span className="pop-in inline-block px-6 py-2.5 rounded-full font-extrabold text-lg" style={{ background: '#3e301d', border: '1px solid var(--gold)', color: 'var(--gold)' }}>
             {locked.name} לחץ/ה ראשון/ה!
           </span>
         )}
-        {revealed && (
+        {game.last_award_correct === true && awarded && (
           <span className="pop-in inline-block px-6 py-2.5 rounded-full font-extrabold text-lg" style={{ background: '#153e1f', border: '1px solid #4ade80', color: '#7bda92' }}>
-            {locked ? `${locked.name} ענה/תה נכון!` : 'התשובה נחשפה'}
+            {awarded.name} ענה/תה נכון! +{game.scoring_correct}
+          </span>
+        )}
+        {game.last_award_correct === false && awarded && (
+          <span className="pop-in inline-block px-6 py-2.5 rounded-full font-extrabold text-lg" style={{ background: '#4a1a1a', border: '1px solid #ee6d75', color: '#ff9d9d' }}>
+            {awarded.name} טעה/תה! {game.scoring_wrong} · הבאזר פתוח לשאר המדורים
+          </span>
+        )}
+        {revealed && game.last_award_correct === null && (
+          <span className="pop-in inline-block px-6 py-2.5 rounded-full font-extrabold text-lg" style={{ background: '#153e1f', border: '1px solid #4ade80', color: '#7bda92' }}>
+            התשובה נחשפה
           </span>
         )}
       </div>

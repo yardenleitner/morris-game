@@ -13,7 +13,7 @@ export interface Sector {
   updated_at: string;
 }
 
-export type Stage = 'title' | 'boarding' | 'trivia' | 'truefalse' | 'speech' | 'leaderboard' | 'end';
+export type Stage = 'title' | 'boarding' | 'rules' | 'trivia' | 'truefalse' | 'speech' | 'leaderboard' | 'end';
 
 export interface GameState {
   id: number;
@@ -25,6 +25,7 @@ export interface GameState {
   current_question_text: string | null;
   current_question_options: string[] | null;
   revealed_correct_index: number | null;
+  last_award_correct: boolean | null;
 
   current_story_id: string | null;
   current_story_text: string | null;

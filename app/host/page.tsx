@@ -9,6 +9,7 @@ import { Stage, TriviaQuestion, TrueFalseStory, SpeechWord, SectorId } from '@/l
 const STAGES: { id: Stage; label: string }[] = [
   { id: 'title', label: 'פתיחה' },
   { id: 'boarding', label: 'רישום' },
+  { id: 'rules', label: 'חוקי המשחק' },
   { id: 'trivia', label: 'טריוויה' },
   { id: 'truefalse', label: 'קרה/לא קרה' },
   { id: 'speech', label: 'נאומים' },
@@ -19,6 +20,15 @@ const STAGES: { id: Stage; label: string }[] = [
 async function call(fn: string, args: Record<string, any> = {}) {
   const { error } = await supabase.rpc(fn, { p_key: HOST_KEY, ...args });
   if (error) alert(`שגיאה (${fn}): ${error.message}`);
+}
+
+// loading a question also opens the buzzer and clears the previous reveal (see host_load_question) —
+// this is the one call both "begin trivia" and "next question" need.
+async function loadNextQuestion(questions: TriviaQuestion[], onUsed: () => void) {
+  const next = [...questions].filter((q) => !q.used).sort((a, b) => a.order_index - b.order_index)[0];
+  if (!next) { alert('אין שאלות נוספות שלא נשאלו'); return; }
+  await call('host_load_question', { p_question_id: next.id });
+  onUsed();
 }
 
 export default function HostPage() {
@@ -59,6 +69,7 @@ export default function HostPage() {
 
       {game.stage === 'title' && <TitleStage />}
       {game.stage === 'boarding' && <BoardingStage sectors={sectors} />}
+      {game.stage === 'rules' && <RulesStage questions={questions} onUsed={loadContent} />}
       {game.stage === 'trivia' && <TriviaControls game={game} questions={questions} sectors={sectors} onUsed={loadContent} />}
       {game.stage === 'truefalse' && <TrueFalseControls game={game} stories={stories} onUsed={loadContent} />}
       {game.stage === 'speech' && <SpeechControls game={game} words={words} />}
@@ -113,7 +124,7 @@ function BoardingStage({ sectors }: { sectors: any[] }) {
         <p className="text-[var(--muted)] text-sm">המסך הגדול מציג QR להצטרפות. אשר שכולם התחברו ואז התחל את המשחק.</p>
         <div className="mt-auto pt-4 flex flex-col gap-3">
           <div className="btn done justify-center flex items-center gap-2"><IconCheck />רישום פתוח — מוצג במסך</div>
-          <button onClick={() => call('host_set_stage', { p_stage: 'trivia' })} className="btn gold text-lg py-4 flex items-center justify-center gap-2">
+          <button onClick={() => call('host_set_stage', { p_stage: 'rules' })} className="btn gold text-lg py-4 flex items-center justify-center gap-2">
             התחל את המשחק <IconPlay />
           </button>
         </div>
@@ -136,6 +147,18 @@ function BoardingStage({ sectors }: { sectors: any[] }) {
   );
 }
 
+function RulesStage({ questions, onUsed }: { questions: TriviaQuestion[]; onUsed: () => void }) {
+  return (
+    <section className="host-card p-8 flex flex-col items-center gap-4 text-center">
+      <h2 className="text-xl font-bold text-[var(--gold)]">חוקי המשחק מוקרנים כרגע</h2>
+      <p className="text-[var(--muted)] max-w-md">הקהל רואה את חוקי המשחק. כשמוכנים, התחילו את שאלת הטריוויה הראשונה — הבאזרים ייפתחו אוטומטית.</p>
+      <button onClick={() => loadNextQuestion(questions, onUsed)} className="btn gold text-lg px-8 py-4">
+        התחל טריוויה <IconPlay />
+      </button>
+    </section>
+  );
+}
+
 function EndControls({ stage }: { stage: Stage }) {
   return (
     <section className="host-card p-6 flex items-center justify-between flex-wrap gap-3">
@@ -150,34 +173,50 @@ function EndControls({ stage }: { stage: Stage }) {
 function TriviaControls({ game, questions, sectors, onUsed }: any) {
   const unused = questions.filter((q: TriviaQuestion) => !q.used);
   const locked = sectors.find((s: any) => s.id === game.buzzer_locked_by);
+  const revealed = game.revealed_correct_index !== null;
+  const awardedSector = sectors.find((s: any) => s.id === game.winner_sector_id);
+
   return (
     <section className="host-card p-5 flex flex-col gap-3">
       <h2 className="font-bold text-[var(--gold)]">שלב טריוויה</h2>
-      <div className="flex gap-2 flex-wrap items-center">
-        <select
-          className="bg-black/30 rounded-lg px-3 py-2 flex-1 min-w-[200px] border border-[#5367a9]"
-          onChange={async (e) => { if (e.target.value) { await call('host_load_question', { p_question_id: e.target.value }); onUsed(); } }}
-          value=""
-        >
-          <option value="">בחר שאלה ({unused.length} נותרו)...</option>
-          {questions.map((q: TriviaQuestion) => (
-            <option key={q.id} value={q.id} disabled={q.used}>{q.order_index}. {q.question} {q.used ? '(נענתה)' : ''}</option>
-          ))}
-        </select>
-        <button onClick={() => call('host_open_buzzer')} className="btn blue">פתח באזר</button>
-        <button onClick={() => call('host_close_buzzer')} className="btn">סגור באזר</button>
-        <button onClick={() => call('host_new_round')} className="btn">אפס באזר</button>
-        <button onClick={() => call('host_disqualify_current')} disabled={!locked} className="btn danger">פסול לחצן נוכחי</button>
-        <button onClick={() => call('host_reveal_trivia')} className="btn gold">חשוף תשובה</button>
-      </div>
-      {locked && (
+
+      {revealed ? (
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className={`font-bold ${game.last_award_correct ? 'text-green-400' : 'text-[var(--muted)]'}`}>
+            {game.last_award_correct && awardedSector ? `${awardedSector.name} ענה/תה נכון!` : 'התשובה נחשפה'}
+          </span>
+          <button onClick={() => loadNextQuestion(questions, onUsed)} className="btn gold text-lg flex items-center gap-1.5">
+            השאלה הבאה <IconPlay />
+          </button>
+        </div>
+      ) : (
+        <div className="flex gap-2 flex-wrap items-center">
+          <select
+            className="bg-black/30 rounded-lg px-3 py-2 flex-1 min-w-[200px] border border-[#5367a9]"
+            onChange={async (e) => { if (e.target.value) { await call('host_load_question', { p_question_id: e.target.value }); onUsed(); } }}
+            value=""
+          >
+            <option value="">בחר שאלה ידנית ({unused.length} נותרו)...</option>
+            {questions.map((q: TriviaQuestion) => (
+              <option key={q.id} value={q.id} disabled={q.used}>{q.order_index}. {q.question} {q.used ? '(נענתה)' : ''}</option>
+            ))}
+          </select>
+          <button onClick={() => call('host_open_buzzer')} className="btn blue">פתח באזר</button>
+          <button onClick={() => call('host_close_buzzer')} className="btn">סגור באזר</button>
+          <button onClick={() => call('host_new_round')} className="btn">אפס באזר</button>
+          <button onClick={() => call('host_disqualify_current')} disabled={!locked} className="btn danger">פסול לחצן נוכחי</button>
+          <button onClick={async () => { await call('host_reveal_trivia'); onUsed(); }} className="btn gold">חשוף תשובה (בלי לזכות אף אחד)</button>
+        </div>
+      )}
+
+      {locked && !revealed && (
         <div className="flex items-center gap-3">
           <span>לחץ ראשון: <b style={{ color: locked.color }}>{locked.name}</b></span>
-          <button onClick={() => call('host_award', { p_sector_id: locked.id, p_correct: true })} className="btn gold text-sm flex items-center gap-1.5"><IconCheck size={14} />נכון</button>
+          <button onClick={async () => { await call('host_award', { p_sector_id: locked.id, p_correct: true }); onUsed(); }} className="btn gold text-sm flex items-center gap-1.5"><IconCheck size={14} />נכון</button>
           <button onClick={() => call('host_award', { p_sector_id: locked.id, p_correct: false })} className="btn danger text-sm flex items-center gap-1.5"><IconX size={14} />שגוי</button>
         </div>
       )}
-      <TimerRow />
+      {!revealed && <TimerRow />}
     </section>
   );
 }
