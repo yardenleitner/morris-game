@@ -4,31 +4,35 @@ import Link from 'next/link';
 import { supabase, HOST_KEY } from '@/lib/supabaseClient';
 import { useLiveGame } from '@/lib/useLiveGame';
 import { IconCheck, IconX, IconPlay } from '@/lib/icons';
-import { Stage, TriviaQuestion, TrueFalseStory, SpeechWord, SectorId } from '@/lib/types';
-
-const STAGES: { id: Stage; label: string }[] = [
-  { id: 'title', label: 'פתיחה' },
-  { id: 'boarding', label: 'רישום' },
-  { id: 'rules', label: 'חוקי המשחק' },
-  { id: 'trivia', label: 'טריוויה' },
-  { id: 'truefalse', label: 'קרה/לא קרה' },
-  { id: 'speech', label: 'נאומים' },
-  { id: 'leaderboard', label: 'טבלת מובילים' },
-  { id: 'end', label: 'סיום' },
-];
+import { Stage, TriviaQuestion, TrueFalseStory, SpeechWord } from '@/lib/types';
 
 async function call(fn: string, args: Record<string, any> = {}) {
   const { error } = await supabase.rpc(fn, { p_key: HOST_KEY, ...args });
   if (error) alert(`שגיאה (${fn}): ${error.message}`);
 }
 
-// loading a question also opens the buzzer and clears the previous reveal (see host_load_question) —
-// this is the one call both "begin trivia" and "next question" need.
+// Loading a question/story also opens the buzzer / starts the 15s timer and clears
+// the previous reveal (see the host_load_* RPCs) — one call does the whole "next" step.
 async function loadNextQuestion(questions: TriviaQuestion[], onUsed: () => void) {
   const next = [...questions].filter((q) => !q.used).sort((a, b) => a.order_index - b.order_index)[0];
-  if (!next) { alert('אין שאלות נוספות שלא נשאלו'); return; }
+  if (!next) return;
   await call('host_load_question', { p_question_id: next.id });
   onUsed();
+}
+
+async function loadNextStory(stories: TrueFalseStory[], onUsed: () => void) {
+  const next = [...stories].filter((s) => !s.used).sort((a, b) => a.order_index - b.order_index)[0];
+  if (!next) return;
+  await call('host_load_story', { p_story_id: next.id });
+  onUsed();
+}
+
+// speech_words has no "used" flag — it's inherently ordered, so "next" is just the
+// smallest order_index past whatever word is currently showing.
+async function loadNextWord(game: any, words: SpeechWord[]) {
+  const next = [...words].filter((w) => w.order_index > (game.current_word_index || 0)).sort((a, b) => a.order_index - b.order_index)[0];
+  if (!next) return;
+  await call('host_set_speech_word', { p_index: next.order_index });
 }
 
 export default function HostPage() {
@@ -36,7 +40,6 @@ export default function HostPage() {
   const [questions, setQuestions] = useState<TriviaQuestion[]>([]);
   const [stories, setStories] = useState<TrueFalseStory[]>([]);
   const [words, setWords] = useState<SpeechWord[]>([]);
-  const [showManualStages, setShowManualStages] = useState(false);
 
   const loadContent = useCallback(async () => {
     const headers = { 'x-host-key': HOST_KEY };
@@ -70,35 +73,14 @@ export default function HostPage() {
       {game.stage === 'title' && <TitleStage />}
       {game.stage === 'boarding' && <BoardingStage sectors={sectors} />}
       {game.stage === 'rules' && <RulesStage questions={questions} onUsed={loadContent} />}
-      {game.stage === 'trivia' && <TriviaControls game={game} questions={questions} sectors={sectors} onUsed={loadContent} />}
-      {game.stage === 'truefalse' && <TrueFalseControls game={game} stories={stories} onUsed={loadContent} />}
+      {game.stage === 'trivia' && <TriviaControls game={game} questions={questions} stories={stories} sectors={sectors} onUsed={loadContent} />}
+      {game.stage === 'truefalse' && <TrueFalseControls game={game} stories={stories} words={words} onUsed={loadContent} />}
       {game.stage === 'speech' && <SpeechControls game={game} words={words} />}
       {(game.stage === 'leaderboard' || game.stage === 'end') && <EndControls stage={game.stage} />}
 
       {(game.stage === 'trivia' || game.stage === 'truefalse' || game.stage === 'speech') && (
         <SectorsGrid sectors={sectors} />
       )}
-
-      <section className="host-card p-4">
-        <button onClick={() => setShowManualStages((v) => !v)} className="text-sm text-[var(--muted)]">
-          {showManualStages ? '▲ הסתר מעבר ידני בין שלבים' : '▼ מעבר ידני בין שלבים (לחזרות / תקלות)'}
-        </button>
-        {showManualStages && (
-          <div className="flex gap-2 flex-wrap mt-3">
-            {STAGES.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => call('host_set_stage', { p_stage: s.id })}
-                className={`btn text-sm ${game.stage === s.id ? 'gold' : ''}`}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {(game.stage === 'trivia' || game.stage === 'truefalse') && <ScoringSettings game={game} />}
     </main>
   );
 }
@@ -170,113 +152,111 @@ function EndControls({ stage }: { stage: Stage }) {
   );
 }
 
-function TriviaControls({ game, questions, sectors, onUsed }: any) {
-  const unused = questions.filter((q: TriviaQuestion) => !q.used);
+// Trivia: the host's only real decisions are "who buzzed, were they right" and,
+// once resolved, when to move on. Buzzer open/close, timers and manual question
+// picking are all handled automatically now — nothing left for the host to fiddle with.
+function TriviaControls({ game, questions, stories, sectors, onUsed }: any) {
+  // current question's own order_index, not a count derived from `used` — `used` flips
+  // the instant an answer is scored, before "Next Question" is clicked, which would
+  // otherwise show the wrong number while still displaying that question's result.
+  const currentQuestion = questions.find((q: TriviaQuestion) => q.id === game.current_question_id);
+  const noMoreQuestions = questions.length > 0 && questions.every((q: TriviaQuestion) => q.used);
   const locked = sectors.find((s: any) => s.id === game.buzzer_locked_by);
   const revealed = game.revealed_correct_index !== null;
   const awardedSector = sectors.find((s: any) => s.id === game.winner_sector_id);
 
+  const advance = () =>
+    noMoreQuestions ? loadNextStory(stories, onUsed) : loadNextQuestion(questions, onUsed);
+
   return (
-    <section className="host-card p-5 flex flex-col gap-3">
-      <h2 className="font-bold text-[var(--gold)]">שלב טריוויה</h2>
+    <section className="host-card p-6 flex flex-col items-center gap-4 text-center">
+      <h2 className="font-bold text-[var(--gold)]">שלב טריוויה · שאלה {currentQuestion?.order_index ?? '–'} מתוך {questions.length}</h2>
 
       {revealed ? (
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className={`font-bold ${game.last_award_correct ? 'text-green-400' : 'text-[var(--muted)]'}`}>
+        <>
+          <span className={`text-lg font-bold ${game.last_award_correct ? 'text-green-400' : 'text-[var(--muted)]'}`}>
             {game.last_award_correct && awardedSector ? `${awardedSector.name} ענה/תה נכון!` : 'התשובה נחשפה'}
           </span>
-          <button onClick={() => loadNextQuestion(questions, onUsed)} className="btn gold text-lg flex items-center gap-1.5">
-            השאלה הבאה <IconPlay />
+          <button onClick={advance} className="btn gold text-lg px-6 py-3 flex items-center gap-1.5">
+            {noMoreQuestions ? 'מעבר לשלב קרה / לא קרה' : 'השאלה הבאה'} <IconPlay />
           </button>
-        </div>
+        </>
+      ) : locked ? (
+        <>
+          <span className="text-lg">לחץ ראשון: <b style={{ color: locked.color }}>{locked.name}</b></span>
+          <div className="flex gap-3">
+            <button onClick={async () => { await call('host_award', { p_sector_id: locked.id, p_correct: true }); onUsed(); }} className="btn gold text-lg px-6 py-3 flex items-center gap-1.5"><IconCheck size={16} />נכון</button>
+            <button onClick={() => call('host_award', { p_sector_id: locked.id, p_correct: false })} className="btn danger text-lg px-6 py-3 flex items-center gap-1.5"><IconX size={16} />שגוי</button>
+          </div>
+        </>
       ) : (
-        <div className="flex gap-2 flex-wrap items-center">
-          <select
-            className="bg-black/30 rounded-lg px-3 py-2 flex-1 min-w-[200px] border border-[#5367a9]"
-            onChange={async (e) => { if (e.target.value) { await call('host_load_question', { p_question_id: e.target.value }); onUsed(); } }}
-            value=""
-          >
-            <option value="">בחר שאלה ידנית ({unused.length} נותרו)...</option>
-            {questions.map((q: TriviaQuestion) => (
-              <option key={q.id} value={q.id} disabled={q.used}>{q.order_index}. {q.question} {q.used ? '(נענתה)' : ''}</option>
-            ))}
-          </select>
-          <button onClick={() => call('host_open_buzzer')} className="btn blue">פתח באזר</button>
-          <button onClick={() => call('host_close_buzzer')} className="btn">סגור באזר</button>
-          <button onClick={() => call('host_new_round')} className="btn">אפס באזר</button>
-          <button onClick={() => call('host_disqualify_current')} disabled={!locked} className="btn danger">פסול לחצן נוכחי</button>
-          <button onClick={async () => { await call('host_reveal_trivia'); onUsed(); }} className="btn gold">חשוף תשובה (בלי לזכות אף אחד)</button>
-        </div>
+        <>
+          <p className="text-[var(--muted)]">הבאזר פתוח — ממתינים ללחיצה...</p>
+          <button onClick={async () => { await call('host_reveal_trivia'); onUsed(); }} className="text-sm text-[var(--muted)] underline hover:text-white">
+            אף אחד לא ענה — דלג לשאלה הבאה
+          </button>
+        </>
       )}
-
-      {locked && !revealed && (
-        <div className="flex items-center gap-3">
-          <span>לחץ ראשון: <b style={{ color: locked.color }}>{locked.name}</b></span>
-          <button onClick={async () => { await call('host_award', { p_sector_id: locked.id, p_correct: true }); onUsed(); }} className="btn gold text-sm flex items-center gap-1.5"><IconCheck size={14} />נכון</button>
-          <button onClick={() => call('host_award', { p_sector_id: locked.id, p_correct: false })} className="btn danger text-sm flex items-center gap-1.5"><IconX size={14} />שגוי</button>
-        </div>
-      )}
-      {!revealed && <TimerRow />}
     </section>
   );
 }
 
-function TrueFalseControls({ game, stories, onUsed }: any) {
-  const unused = stories.filter((s: TrueFalseStory) => !s.used);
+// True/false: same idea — the host just reveals when ready and moves on. The 15s
+// timer starts itself when the story loads and locks the phones automatically.
+function TrueFalseControls({ game, stories, words, onUsed }: any) {
+  const currentStory = stories.find((s: TrueFalseStory) => s.id === game.current_story_id);
+  const noMoreStories = stories.length > 0 && stories.every((s: TrueFalseStory) => s.used);
+  const revealed = game.revealed_is_true !== null;
+
+  const advance = () =>
+    noMoreStories ? loadNextWord(game, words) : loadNextStory(stories, onUsed);
+
   return (
-    <section className="host-card p-5 flex flex-col gap-3">
-      <h2 className="font-bold text-[var(--gold)]">שלב קרה / לא קרה</h2>
-      <div className="flex gap-2 flex-wrap items-center">
-        <select
-          className="bg-black/30 rounded-lg px-3 py-2 flex-1 min-w-[200px] border border-[#5367a9]"
-          onChange={async (e) => { if (e.target.value) { await call('host_load_story', { p_story_id: e.target.value }); onUsed(); } }}
-          value=""
-        >
-          <option value="">בחר סיפור ({unused.length} נותרו)...</option>
-          {stories.map((s: TrueFalseStory) => (
-            <option key={s.id} value={s.id} disabled={s.used}>{s.order_index}. {s.story.slice(0, 40)} {s.used ? '(נחשף)' : ''}</option>
-          ))}
-        </select>
-        <button onClick={() => call('host_reveal_truefalse')} className="btn gold">חשוף תשובה + חשב ניקוד</button>
-      </div>
-      <p className="text-sm text-[var(--muted)]">הצביעו: {Object.keys(game.current_votes).length}/5</p>
-      <TimerRow />
+    <section className="host-card p-6 flex flex-col items-center gap-4 text-center">
+      <h2 className="font-bold text-[var(--gold)]">שלב קרה / לא קרה · סיפור {currentStory?.order_index ?? '–'} מתוך {stories.length}</h2>
+
+      {revealed ? (
+        <>
+          <span className={`text-lg font-bold ${game.revealed_is_true ? 'text-green-400' : 'text-[#ff9d9d]'}`}>
+            {game.revealed_is_true ? 'קרה!' : 'לא קרה!'}
+          </span>
+          <button onClick={advance} className="btn gold text-lg px-6 py-3 flex items-center gap-1.5">
+            {noMoreStories ? 'מעבר לשלב נאומי הפרידה' : 'הסיפור הבא'} <IconPlay />
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="text-[var(--muted)]">הצביעו: {Object.keys(game.current_votes).length}/5</p>
+          <button onClick={async () => { await call('host_reveal_truefalse'); onUsed(); }} className="btn gold text-lg px-6 py-3">
+            חשוף תשובה
+          </button>
+        </>
+      )}
     </section>
   );
 }
 
 function SpeechControls({ game, words }: { game: any; words: SpeechWord[] }) {
+  const maxIndex = Math.max(0, ...words.map((w) => w.order_index));
+  const isLastWord = words.length > 0 && game.current_word_index >= maxIndex;
+
   return (
-    <section className="host-card p-5 flex flex-col gap-3">
-      <h2 className="font-bold text-[var(--gold)]">שלב נאומי פרידה</h2>
-      <div className="flex gap-2 flex-wrap">
-        {words.map((w) => (
-          <button
-            key={w.id}
-            onClick={() => call('host_set_speech_word', { p_index: w.order_index })}
-            className={`btn text-sm ${game.current_word_index === w.order_index && game.current_word === w.word ? 'gold' : ''}`}
-          >
-            {w.order_index}. {w.word}
-          </button>
-        ))}
-      </div>
-      <TimerRow />
+    <section className="host-card p-6 flex flex-col items-center gap-4 text-center">
+      <h2 className="font-bold text-[var(--gold)]">שלב נאומי פרידה · מילה {game.current_word_index} מתוך {words.length}</h2>
+      {isLastWord ? (
+        <button onClick={() => call('host_set_stage', { p_stage: 'leaderboard' })} className="btn gold text-lg px-6 py-3 flex items-center gap-1.5">
+          הצג טבלת מובילים <IconPlay />
+        </button>
+      ) : (
+        <button onClick={() => loadNextWord(game, words)} className="btn gold text-lg px-6 py-3 flex items-center gap-1.5">
+          המילה הבאה <IconPlay />
+        </button>
+      )}
     </section>
   );
 }
 
-function TimerRow() {
-  return (
-    <div className="flex gap-2 items-center">
-      <span className="text-sm text-[var(--muted)]">טיימר:</span>
-      {[15, 30, 60, 90].map((sec) => (
-        <button key={sec} onClick={() => call('host_set_timer', { p_seconds: sec })} className="btn text-sm">{sec} שנ׳</button>
-      ))}
-      <button onClick={() => call('host_clear_timer')} className="btn text-sm">נקה</button>
-    </div>
-  );
-}
-
+// Read-only standings — no per-sector controls; scoring is fully automatic now.
 function SectorsGrid({ sectors }: { sectors: any[] }) {
   return (
     <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
@@ -288,36 +268,8 @@ function SectorsGrid({ sectors }: { sectors: any[] }) {
           </div>
           <div className="text-sm text-[var(--muted)] truncate">{s.rep_name || 'לא הצטרף'}</div>
           <div className="text-2xl font-black mt-1">{s.score}</div>
-          <div className="text-xs text-[var(--muted)]">נכון: {s.correct_count} · ראשון: {s.first_buzz_count}</div>
-          <div className="flex gap-1 mt-2 flex-wrap">
-            <button onClick={() => call('host_adjust_score', { p_sector_id: s.id, p_delta: 10 })} className="text-xs rounded-lg bg-white/10 px-2 py-1">+10</button>
-            <button onClick={() => call('host_adjust_score', { p_sector_id: s.id, p_delta: -10 })} className="text-xs rounded-lg bg-white/10 px-2 py-1">-10</button>
-            <button onClick={() => call('host_adjust_score', { p_sector_id: s.id, p_delta: 100 })} className="text-xs rounded-lg bg-white/10 px-2 py-1">+100</button>
-            <button
-              onClick={() => call('host_set_disqualified', { p_sector_id: s.id, p_disqualified: !s.disqualified })}
-              className={`text-xs rounded-lg px-2 py-1 ${s.disqualified ? 'bg-red-600' : 'bg-white/10'}`}
-            >
-              {s.disqualified ? 'בטל פסילה' : 'פסול מהמשחק'}
-            </button>
-          </div>
         </div>
       ))}
-    </section>
-  );
-}
-
-function ScoringSettings({ game }: { game: any }) {
-  return (
-    <section className="host-card p-4 flex gap-4 items-center flex-wrap">
-      <h2 className="font-bold text-[var(--gold)] text-sm">שיטת ניקוד</h2>
-      <label className="text-sm flex items-center gap-2">
-        נכון:
-        <input type="number" defaultValue={game.scoring_correct} onBlur={(e) => call('host_set_scoring', { p_correct: Number(e.target.value), p_wrong: game.scoring_wrong })} className="w-20 bg-black/30 rounded-lg px-2 py-1 border border-[#5367a9]" />
-      </label>
-      <label className="text-sm flex items-center gap-2">
-        שגוי:
-        <input type="number" defaultValue={game.scoring_wrong} onBlur={(e) => call('host_set_scoring', { p_correct: game.scoring_correct, p_wrong: Number(e.target.value) })} className="w-20 bg-black/30 rounded-lg px-2 py-1 border border-[#5367a9]" />
-      </label>
     </section>
   );
 }
