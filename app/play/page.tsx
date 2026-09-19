@@ -31,10 +31,29 @@ export default function PlayPage() {
   const [voted, setVoted] = useState(false);
   const voteRemaining = useCountdown(game && game.stage === 'truefalse' ? game.timer_ends_at : null);
 
+  const [storageChecked, setStorageChecked] = useState(false);
+
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) setMySector(saved as SectorId);
+    else setStorageChecked(true); // nothing to verify
   }, []);
+
+  // a sector id restored from localStorage doesn't mean the server actually has us
+  // connected — e.g. after a host reset, or a stale value left over from another
+  // session on this browser. Verify it once against real data before trusting it;
+  // otherwise it silently shows a "joined" screen for a sector we were never added to.
+  // Runs only until the first real sectors snapshot arrives, so it never re-fires and
+  // fights a fresh join (whose setMySector call doesn't go through this check at all).
+  useEffect(() => {
+    if (storageChecked || loading || !mySector) return;
+    const me = sectors.find((s) => s.id === mySector);
+    if (!me?.connected) {
+      localStorage.removeItem(STORAGE_KEY);
+      setMySector(null);
+    }
+    setStorageChecked(true);
+  }, [storageChecked, loading, mySector, sectors]);
 
   useEffect(() => { setVoted(false); }, [game?.round_id]);
 
