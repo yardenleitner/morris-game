@@ -161,9 +161,14 @@ function Trivia({ game, sectors }: { game: any; sectors: Sector[] }) {
 
   useEffect(() => {
     const key = `${game.current_question_id}:${game.winner_sector_id}`;
-    if (game.last_award_correct === true && firedFor.current !== key) {
+    if (game.last_award_correct !== null && firedFor.current !== key) {
       firedFor.current = key;
-      confetti({ particleCount: 160, spread: 80, origin: { y: 0.5 }, colors: ['#ffcf63', '#eb9b2a', '#58a9ff', '#ffffff'] });
+      if (game.last_award_correct === true) {
+        confetti({ particleCount: 160, spread: 80, origin: { y: 0.5 }, colors: ['#ffcf63', '#eb9b2a', '#58a9ff', '#ffffff'] });
+        new Audio('/sounds/correct.mp3').play().catch(() => {});
+      } else {
+        new Audio('/sounds/buzzer.mp3').play().catch(() => {});
+      }
     }
   }, [game.current_question_id, game.winner_sector_id, game.last_award_correct]);
 
