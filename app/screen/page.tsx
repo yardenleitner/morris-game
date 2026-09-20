@@ -3,33 +3,101 @@ import { useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import confetti from 'canvas-confetti';
 import { useLiveGame } from '@/lib/useLiveGame';
-import { IconTrophy } from '@/lib/icons';
+import { IconTrophy, IconPlay, IconPause } from '@/lib/icons';
 import { Sector } from '@/lib/types';
+
+const VOLUME_KEY = 'morris-music-volume';
+const PAUSED_KEY = 'morris-music-paused';
 
 function useThemeMusic(active: boolean) {
   const ref = useRef<HTMLAudioElement | null>(null);
+  const started = useRef(false);
   const [needsTap, setNeedsTap] = useState(false);
+  const [paused, setPaused] = useState(() => typeof window !== 'undefined' && localStorage.getItem(PAUSED_KEY) === '1');
+  const [volume, setVolume] = useState(() => {
+    if (typeof window === 'undefined') return 0.5;
+    const stored = Number(localStorage.getItem(VOLUME_KEY));
+    return stored > 0 && stored <= 1 ? stored : 0.5;
+  });
 
+  // keep the element's live volume in sync + remember it for next time
   useEffect(() => {
-    if (!active) return;
+    if (ref.current) ref.current.volume = volume;
+    localStorage.setItem(VOLUME_KEY, String(volume));
+  }, [volume]);
+
+  // start the music once the show becomes active, then follow paused/resume
+  useEffect(() => {
     const audio = ref.current;
-    if (!audio) return;
-    audio.currentTime = 0;
-    audio.play().then(() => setNeedsTap(false)).catch(() => setNeedsTap(true));
-    return () => { audio.pause(); };
-  }, [active]);
+    if (!audio || !active) return;
+    if (!started.current) {
+      started.current = true;
+      audio.currentTime = 0;
+      audio.volume = volume;
+    }
+    if (paused) {
+      audio.pause();
+    } else {
+      audio.play().then(() => setNeedsTap(false)).catch(() => setNeedsTap(true));
+    }
+    // volume is only read on first start here; live changes are handled above
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, paused]);
+
+  useEffect(() => () => { ref.current?.pause(); }, []);
 
   const enableSound = () => {
     ref.current?.play().then(() => setNeedsTap(false)).catch(() => {});
   };
 
-  return { ref, needsTap, enableSound };
+  const togglePaused = () => setPaused((p) => {
+    const next = !p;
+    localStorage.setItem(PAUSED_KEY, next ? '1' : '0');
+    return next;
+  });
+
+  return { ref, needsTap, paused, volume, setVolume, enableSound, togglePaused };
+}
+
+function MusicControls({
+  needsTap, paused, volume, onVolumeChange, onToggle,
+}: {
+  needsTap: boolean; paused: boolean; volume: number; onVolumeChange: (v: number) => void; onToggle: () => void;
+}) {
+  const showPlayIcon = needsTap || paused;
+  return (
+    <div
+      className="fixed top-6 left-6 z-50 flex items-center gap-3 px-4 py-2.5 rounded-full"
+      style={{ background: '#0c1642dd', border: '1px solid #4d64aa', backdropFilter: 'blur(6px)' }}
+    >
+      <button
+        onClick={onToggle}
+        className="w-9 h-9 rounded-full grid place-items-center flex-shrink-0"
+        style={{ background: 'linear-gradient(135deg,#fff0a9,#eb9b2a)', color: '#201305' }}
+        aria-label={showPlayIcon ? 'הפעל מוזיקה' : 'השהה מוזיקה'}
+        title={needsTap ? 'הפעילו סאונד' : showPlayIcon ? 'הפעל מוזיקה' : 'השהה מוזיקה'}
+      >
+        {showPlayIcon ? <IconPlay size={13} /> : <IconPause size={13} />}
+      </button>
+      <input
+        type="range"
+        min={0}
+        max={1}
+        step={0.05}
+        value={volume}
+        onChange={(e) => onVolumeChange(Number(e.target.value))}
+        className="w-24"
+        style={{ accentColor: 'var(--gold)' }}
+        aria-label="עוצמת קול"
+      />
+    </div>
+  );
 }
 
 export default function ScreenPage() {
   const { game, sectors, loading } = useLiveGame();
-  const musicActive = game?.stage === 'title' || game?.stage === 'boarding';
-  const { ref: musicRef, needsTap, enableSound } = useThemeMusic(musicActive);
+  const musicActive = !!game;
+  const { ref: musicRef, needsTap, paused, volume, setVolume, enableSound, togglePaused } = useThemeMusic(musicActive);
 
   if (loading || !game) {
     return <main className="flex-1 flex items-center justify-center text-3xl gold-text">טוען...</main>;
@@ -38,33 +106,35 @@ export default function ScreenPage() {
   const music = (
     <>
       <audio ref={musicRef} src="/theme-music.mp3" loop preload="auto" />
-      {needsTap && (
-        <button
-          onClick={enableSound}
-          className="fixed top-6 left-6 z-50 px-5 py-3 rounded-full font-extrabold text-[#201305]"
-          style={{ background: 'linear-gradient(135deg,#fff0a9,#eb9b2a)', border: '1px solid #ffd878' }}
-        >
-          🔊 הפעילו סאונד
-        </button>
-      )}
+      <MusicControls
+        needsTap={needsTap}
+        paused={paused}
+        volume={volume}
+        onVolumeChange={setVolume}
+        onToggle={needsTap ? enableSound : togglePaused}
+      />
     </>
   );
 
-  if (game.stage === 'title') return <>{music}<TitleScreen /></>;
-  if (game.stage === 'boarding') return <>{music}<BoardingScreen sectors={sectors} /></>;
-  if (game.stage === 'rules') return <RulesScreen />;
-  if (game.stage === 'end') return <WinnerScreen sectors={sectors} />;
+  let content: React.ReactNode;
+  if (game.stage === 'title') content = <TitleScreen />;
+  else if (game.stage === 'boarding') content = <BoardingScreen sectors={sectors} />;
+  else if (game.stage === 'rules') content = <RulesScreen />;
+  else if (game.stage === 'end') content = <WinnerScreen sectors={sectors} />;
+  else {
+    content = (
+      <main className="flex-1 flex flex-col p-6 gap-5">
+        <div className="flex-1 flex items-center justify-center">
+          {game.stage === 'trivia' && <Trivia game={game} sectors={sectors} />}
+          {game.stage === 'truefalse' && <TrueFalse game={game} sectors={sectors} />}
+          {game.stage === 'speech' && <Speech game={game} />}
+          {game.stage === 'leaderboard' && <Leaderboard sectors={sectors} />}
+        </div>
+      </main>
+    );
+  }
 
-  return (
-    <main className="flex-1 flex flex-col p-6 gap-5">
-      <div className="flex-1 flex items-center justify-center">
-        {game.stage === 'trivia' && <Trivia game={game} sectors={sectors} />}
-        {game.stage === 'truefalse' && <TrueFalse game={game} sectors={sectors} />}
-        {game.stage === 'speech' && <Speech game={game} />}
-        {game.stage === 'leaderboard' && <Leaderboard sectors={sectors} />}
-      </div>
-    </main>
-  );
+  return <>{music}{content}</>;
 }
 
 function TitleScreen() {
