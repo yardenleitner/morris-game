@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import confetti from 'canvas-confetti';
 import { useLiveGame } from '@/lib/useLiveGame';
-import { IconStar, IconTrophy } from '@/lib/icons';
+import { IconTrophy } from '@/lib/icons';
 import { Sector } from '@/lib/types';
 
 export default function ScreenPage() {
@@ -33,19 +33,17 @@ export default function ScreenPage() {
 function TitleScreen() {
   return (
     <main
-      className="flex-1 relative overflow-hidden flex flex-col items-center justify-center text-center gap-6 px-10"
+      className="flex-1 relative overflow-hidden flex flex-col items-center justify-end text-center gap-6 px-10 pb-14"
       style={{
-        backgroundImage: "linear-gradient(180deg,rgba(5,10,34,.35),rgba(5,10,34,.88) 78%),url('/title-bg.jpg')",
+        backgroundImage: "linear-gradient(180deg,rgba(5,10,34,0),rgba(5,10,34,.6) 88%),url('/title-bg.jpg')",
         backgroundSize: 'cover',
         backgroundPosition: 'center',
       }}
     >
       <div className="absolute top-7 right-9"><span className="live-dot"><i />שידור חי</span></div>
-      <div className="pop-in flex flex-col items-center gap-6">
-        <IconStar size={72} />
-        <h1 className="text-5xl md:text-8xl font-black gold-text leading-none">מי מכיר את מוריס?</h1>
-        <p className="text-lg md:text-2xl text-[var(--muted)] font-semibold">שעשועון פרידה חגיגי · חמישה מדורים, משימה אחת</p>
-        <div className="mt-2 px-6 py-3 rounded-full font-extrabold text-[#201305]" style={{ background: 'linear-gradient(135deg,#fff0a9,#eb9b2a)', border: '1px solid #ffd878' }}>
+      <div className="pop-in flex flex-col items-center gap-4 relative z-10">
+        <p className="text-lg md:text-2xl text-[var(--muted)] font-semibold" style={{ textShadow: '0 2px 14px rgba(0,0,0,.9)' }}>שעשועון פרידה חגיגי · חמישה מדורים, משימה אחת</p>
+        <div className="px-6 py-3 rounded-full font-extrabold text-[#201305]" style={{ background: 'linear-gradient(135deg,#fff0a9,#eb9b2a)', border: '1px solid #ffd878' }}>
           ממתינים למנחה שיתחיל...
         </div>
       </div>
@@ -57,7 +55,14 @@ function BoardingScreen({ sectors }: { sectors: Sector[] }) {
   const [url, setUrl] = useState('');
   useEffect(() => { setUrl(`${window.location.origin}/play`); }, []);
   return (
-    <main className="flex-1 flex flex-col items-center justify-center gap-8 p-10">
+    <main
+      className="flex-1 flex flex-col items-center justify-center gap-8 p-10"
+      style={{
+        backgroundImage: "linear-gradient(180deg,rgba(5,10,34,.35),rgba(5,10,34,.88) 78%),url('/boarding-bg.jpg')",
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }}
+    >
       <div className="text-center">
         <div className="text-sm font-extrabold text-[var(--gold)] tracking-widest">מי מכיר את מוריס?</div>
         <h1 className="mt-1 text-3xl md:text-4xl font-extrabold">סרקו והצטרפו מהטלפון</h1>
