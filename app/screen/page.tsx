@@ -6,15 +6,52 @@ import { useLiveGame } from '@/lib/useLiveGame';
 import { IconTrophy } from '@/lib/icons';
 import { Sector } from '@/lib/types';
 
+function useThemeMusic(active: boolean) {
+  const ref = useRef<HTMLAudioElement | null>(null);
+  const [needsTap, setNeedsTap] = useState(false);
+
+  useEffect(() => {
+    if (!active) return;
+    const audio = ref.current;
+    if (!audio) return;
+    audio.currentTime = 0;
+    audio.play().then(() => setNeedsTap(false)).catch(() => setNeedsTap(true));
+    return () => { audio.pause(); };
+  }, [active]);
+
+  const enableSound = () => {
+    ref.current?.play().then(() => setNeedsTap(false)).catch(() => {});
+  };
+
+  return { ref, needsTap, enableSound };
+}
+
 export default function ScreenPage() {
   const { game, sectors, loading } = useLiveGame();
+  const musicActive = game?.stage === 'title' || game?.stage === 'boarding';
+  const { ref: musicRef, needsTap, enableSound } = useThemeMusic(musicActive);
 
   if (loading || !game) {
     return <main className="flex-1 flex items-center justify-center text-3xl gold-text">טוען...</main>;
   }
 
-  if (game.stage === 'title') return <TitleScreen />;
-  if (game.stage === 'boarding') return <BoardingScreen sectors={sectors} />;
+  const music = (
+    <>
+      <audio ref={musicRef} src="/theme-music.mp3" loop preload="auto" />
+      {needsTap && (
+        <button
+          onClick={enableSound}
+          className="fixed top-6 left-6 z-50 px-5 py-3 rounded-full font-extrabold text-[#201305]"
+          style={{ background: 'linear-gradient(135deg,#fff0a9,#eb9b2a)', border: '1px solid #ffd878' }}
+        >
+          🔊 הפעילו סאונד
+        </button>
+      )}
+    </>
+  );
+
+  if (game.stage === 'title') return <>{music}<TitleScreen /></>;
+  if (game.stage === 'boarding') return <>{music}<BoardingScreen sectors={sectors} /></>;
   if (game.stage === 'rules') return <RulesScreen />;
   if (game.stage === 'end') return <WinnerScreen sectors={sectors} />;
 
