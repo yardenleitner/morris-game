@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { HOST_KEY } from '@/lib/supabaseClient';
+import { HOST_KEY } from '@/lib/config';
 import { TriviaQuestion, TrueFalseStory, SpeechWord } from '@/lib/types';
 import { IconX, IconPlus } from '@/lib/icons';
 

@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# מי מכיר את מוריס?
 
-## Getting Started
+Live quiz show for five sectors — a projector screen, a host console, and the
+reps' own phones as buzzers. Everything runs on one laptop; there is no database
+and no cloud service.
 
-First, run the development server:
+## Running it
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Double-click `start-server.bat`. It builds, prints the three URLs, and starts the
+server. The phone URL uses whatever IP the laptop has today.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+| Screen | URL | Runs on |
+| --- | --- | --- |
+| Projector | `/screen` | laptop, second display |
+| Host console | `/host` | laptop |
+| Rep buzzer | `/play` | each rep's phone |
+| Content editor | `/host/content` | laptop, before the show |
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The reps' phones must be on the same Wi-Fi as the laptop. `/screen` shows a QR
+code during the boarding stage that points at `/play`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## State
 
-## Learn More
+The game lives in `data/state.json`, rewritten after every change. Closing the
+window, restarting the server, or refreshing any browser does not lose scores —
+each device picks the game back up where it was. Reps stay joined across a
+refresh because their phone remembers its sector.
 
-To learn more about Next.js, take a look at the following resources:
+To wipe scores and start over, use **איפוס משחק** on the host console.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Because the state is held in the server process, this has to run as one
+long-lived server. It will not work on Vercel or any serverless host, where each
+request would get its own empty copy.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Content
 
-## Deploy on Vercel
+The 20 trivia questions, 5 true/false stories, and 8 speech trap words ship in
+`lib/seedContent.ts` and are copied into `data/state.json` the first time the
+server starts. Edit them live at `/host/content`; edits go to the state file, not
+back to the seed. Delete `data/state.json` to start again from the seed.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Answers never leave the server — `/play` only ever receives the game state and
+the scoreboard, never the question bank.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Before the show
+
+- Test with a **real phone on the venue's Wi-Fi**. Some corporate networks block
+  device-to-device traffic entirely, which no change here can work around.
+- If Windows asks about firewall access for Node, allow it for that network.
+- `NEXT_PUBLIC_HOST_KEY` in `.env.local` gates the host screens. It defaults to
+  `morris`; change it if the URL will be visible to the audience.

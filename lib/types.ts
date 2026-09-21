@@ -73,3 +73,18 @@ export interface SpeechWord {
 }
 
 export const SECTOR_IDS: SectorId[] = ['452', '454', '455', '456', '458'];
+
+// Starting content for a brand-new state file. Ids and `used` flags are assigned
+// at that point, so the seed itself carries neither.
+export interface SeedContent {
+  questions: Omit<TriviaQuestion, 'id' | 'used'>[];
+  stories: Omit<TrueFalseStory, 'id' | 'used'>[];
+  words: Omit<SpeechWord, 'id'>[];
+}
+
+// What every device is allowed to see. Deliberately excludes the question bank —
+// it holds the answers, and /play runs on the contestants' own phones.
+export interface PublicState {
+  game: GameState;
+  sectors: Sector[];
+}

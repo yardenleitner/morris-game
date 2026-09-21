@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { playerAction } from '@/lib/actions';
 import { useLiveGame } from '@/lib/useLiveGame';
 import { IconClock } from '@/lib/icons';
 import { SectorId, SECTOR_IDS } from '@/lib/types';
@@ -97,12 +97,14 @@ export default function PlayPage() {
               disabled={!nameInput.trim() || joining}
               onClick={async () => {
                 setJoining(true);
-                const { error } = await supabase.rpc('join_sector', { p_sector_id: pickedSector, p_name: nameInput.trim() });
-                setJoining(false);
-                if (error) {
-                  alert(`ההצטרפות נכשלה, נסו שוב (${error.message})`);
+                try {
+                  await playerAction('join_sector', { p_sector_id: pickedSector, p_name: nameInput.trim() });
+                } catch (e) {
+                  setJoining(false);
+                  alert(`ההצטרפות נכשלה, נסו שוב (${e instanceof Error ? e.message : e})`);
                   return;
                 }
+                setJoining(false);
                 localStorage.setItem(STORAGE_KEY, pickedSector);
                 setMySector(pickedSector);
               }}
@@ -156,7 +158,7 @@ export default function PlayPage() {
             disabled={!canBuzz || pressing}
             onClick={async () => {
               setPressing(true);
-              await supabase.rpc('press_buzzer', { p_sector_id: mySector, p_round_id: game.round_id });
+              await playerAction('press_buzzer', { p_sector_id: mySector, p_round_id: game.round_id }).catch(() => {});
               setPressing(false);
             }}
             className="rounded-full font-black text-3xl disabled:opacity-30"
@@ -190,14 +192,14 @@ export default function PlayPage() {
           ) : (
             <div className="flex gap-3.5 w-full">
               <button
-                onClick={async () => { setVoted(true); await supabase.rpc('submit_vote', { p_sector_id: mySector, p_round_id: game.round_id, p_vote: true }); }}
+                onClick={async () => { setVoted(true); await playerAction('submit_vote', { p_sector_id: mySector, p_round_id: game.round_id, p_vote: true }).catch(() => {}); }}
                 className="flex-1 rounded-2xl py-9 text-2xl font-black"
                 style={{ background: '#16522b', color: '#7bda92' }}
               >
                 קרה
               </button>
               <button
-                onClick={async () => { setVoted(true); await supabase.rpc('submit_vote', { p_sector_id: mySector, p_round_id: game.round_id, p_vote: false }); }}
+                onClick={async () => { setVoted(true); await playerAction('submit_vote', { p_sector_id: mySector, p_round_id: game.round_id, p_vote: false }).catch(() => {}); }}
                 className="flex-1 rounded-2xl py-9 text-2xl font-black"
                 style={{ background: '#5c1a1a', color: '#ff9d9d' }}
               >

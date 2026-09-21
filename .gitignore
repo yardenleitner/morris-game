@@ -4,3 +4,6 @@ node_modules
 .vercel
 .env*
 tsconfig.tsbuildinfo
+
+# live game state (scores, who joined) — written at runtime, never committed
+data

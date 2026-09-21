@@ -1,15 +1,11 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { supabase, HOST_KEY } from '@/lib/supabaseClient';
+import { HOST_KEY } from '@/lib/config';
+import { hostAction as call } from '@/lib/actions';
 import { useLiveGame } from '@/lib/useLiveGame';
 import { IconCheck, IconX, IconPlay } from '@/lib/icons';
 import { Stage, TriviaQuestion, TrueFalseStory, SpeechWord } from '@/lib/types';
-
-async function call(fn: string, args: Record<string, any> = {}) {
-  const { error } = await supabase.rpc(fn, { p_key: HOST_KEY, ...args });
-  if (error) alert(`שגיאה (${fn}): ${error.message}`);
-}
 
 // Loading a question/story also opens the buzzer / starts the 15s timer and clears
 // the previous reveal (see the host_load_* RPCs) — one call does the whole "next" step.

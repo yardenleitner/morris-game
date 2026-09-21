@@ -1,53 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { HOST_KEY } from '@/lib/config';
+import { contentDelete, contentInsert, contentList, contentUpdate, isContentTable } from '@/lib/gameStore';
 
-const TABLES: Record<string, string> = {
-  questions: 'trivia_questions',
-  stories: 'truefalse_stories',
-  words: 'speech_words',
-};
+export const dynamic = 'force-dynamic';
 
+// The content editor at /host/content. Host-only: these rows carry the answers,
+// which is why they are never part of the state sent to /play.
 function authed(req: NextRequest) {
-  return req.headers.get('x-host-key') === process.env.NEXT_PUBLIC_HOST_KEY;
+  return req.headers.get('x-host-key') === HOST_KEY;
 }
 
+const unauthorized = () => NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+const badTable = () => NextResponse.json({ error: 'bad table' }, { status: 400 });
+
 export async function GET(req: NextRequest) {
-  if (!authed(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (!authed(req)) return unauthorized();
   const table = req.nextUrl.searchParams.get('table') || '';
-  const real = TABLES[table];
-  if (!real) return NextResponse.json({ error: 'bad table' }, { status: 400 });
-  const { data, error } = await supabaseAdmin().from(real).select('*').order('order_index');
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ data });
+  if (!isContentTable(table)) return badTable();
+  return NextResponse.json({ data: contentList(table) });
 }
 
 export async function POST(req: NextRequest) {
-  if (!authed(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (!authed(req)) return unauthorized();
   const body = await req.json();
-  const real = TABLES[body.table];
-  if (!real) return NextResponse.json({ error: 'bad table' }, { status: 400 });
-  const { data, error } = await supabaseAdmin().from(real).insert(body.data).select().single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ data });
+  if (!isContentTable(body.table)) return badTable();
+  return NextResponse.json({ data: contentInsert(body.table, body.data) });
 }
 
 export async function PUT(req: NextRequest) {
-  if (!authed(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (!authed(req)) return unauthorized();
   const body = await req.json();
-  const real = TABLES[body.table];
-  if (!real) return NextResponse.json({ error: 'bad table' }, { status: 400 });
-  const { data, error } = await supabaseAdmin().from(real).update(body.data).eq('id', body.id).select().single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!isContentTable(body.table)) return badTable();
+  const data = contentUpdate(body.table, body.id, body.data);
+  if (!data) return NextResponse.json({ error: 'not found' }, { status: 404 });
   return NextResponse.json({ data });
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!authed(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (!authed(req)) return unauthorized();
   const table = req.nextUrl.searchParams.get('table') || '';
   const id = req.nextUrl.searchParams.get('id') || '';
-  const real = TABLES[table];
-  if (!real) return NextResponse.json({ error: 'bad table' }, { status: 400 });
-  const { error } = await supabaseAdmin().from(real).delete().eq('id', id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!isContentTable(table)) return badTable();
+  contentDelete(table, id);
   return NextResponse.json({ ok: true });
 }
