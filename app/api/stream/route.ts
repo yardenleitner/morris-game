@@ -1,6 +1,22 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { publicState, subscribe } from '@/lib/gameStore';
 
 export const dynamic = 'force-dynamic';
+
+// Identity of the build this server is serving. Read from disk rather than from a
+// config value, because next.config.ts is re-evaluated on every `next start` and a
+// clock-derived id there would mint a fresh value per restart, making every tab look
+// stale even when its JavaScript is current. Next rewrites BUILD_ID only on a build,
+// which is exactly when a loaded page really has gone out of date. Read once: it
+// cannot change under a running server.
+const BUILD_ID = (() => {
+  try {
+    return readFileSync(join(process.cwd(), '.next', 'BUILD_ID'), 'utf8').trim();
+  } catch {
+    return ''; // dev server: no BUILD_ID file, so the staleness check stays off
+  }
+})();
 
 // Server-sent events: every screen and phone holds one of these open and gets
 // pushed the whole game state on each change. Pushing (rather than polling) is
@@ -36,6 +52,9 @@ export function GET(req: Request) {
         }
       };
 
+      // First frame announces which build is serving, so a tab left open across
+      // a restart can notice its own JavaScript is stale and reload itself.
+      write(`event: build\ndata: ${JSON.stringify({ build: BUILD_ID })}\n\n`);
       write(`data: ${JSON.stringify(publicState())}\n\n`);
       unsubscribe = subscribe((state) => write(`data: ${JSON.stringify(state)}\n\n`));
 

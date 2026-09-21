@@ -4,6 +4,37 @@ import { GameState, PublicState, Sector, SECTOR_IDS } from './types';
 
 const STALE_AFTER_MS = 25_000; // server pings every 10s, so silence this long means the link is gone
 
+// A tab opened before a rebuild keeps running the JavaScript it was served while
+// SSE happily feeds it fresh state, so it looks completely alive and simply lacks
+// whatever changed — which reads as "the fix didn't work" rather than as a stale
+// page. Rebuilding for a live show and leaving the projector tab open does exactly
+// this, so the page detects it and reloads itself.
+//
+// The comparison is against the build this tab FIRST connected to, not a value
+// baked into the bundle: whatever the server reported when the page loaded is by
+// definition the build that served this JavaScript. If it ever reports a different
+// one, a rebuild happened underneath us and the code in memory is out of date.
+let connectedBuild: string | null = null;
+
+// Reload at most once per observed build, so a mismatch can never become a loop.
+const RELOADED_FOR = 'morris-reloaded-for-build';
+
+function reloadIfStale(serverBuild: string) {
+  if (!serverBuild) return;                       // dev server: check disabled
+  if (connectedBuild === null) {                  // first connect: this is our build
+    connectedBuild = serverBuild;
+    return;
+  }
+  if (serverBuild === connectedBuild) return;
+  try {
+    if (sessionStorage.getItem(RELOADED_FOR) === serverBuild) return; // already tried
+    sessionStorage.setItem(RELOADED_FOR, serverBuild);
+  } catch {
+    return; // no sessionStorage: refuse to reload rather than risk a loop
+  }
+  location.reload();
+}
+
 // Single shared live-state hook for /host, /screen and /play. Holds one SSE
 // connection and replaces the whole snapshot on every push — there are six rows
 // of state in total, so patching partial payloads would be fragile for nothing.
@@ -38,6 +69,13 @@ export function useLiveGame() {
       source.onopen = () => { lastSeen.current = Date.now(); };
       source.onmessage = (e) => apply(JSON.parse(e.data) as PublicState);
       source.addEventListener('ping', () => { lastSeen.current = Date.now(); });
+      source.addEventListener('build', (e) => {
+        try {
+          reloadIfStale((JSON.parse((e as MessageEvent).data) as { build: string }).build);
+        } catch {
+          /* malformed frame: nothing worth reloading over */
+        }
+      });
       // EventSource retries on its own after an error; nothing to do here beyond
       // letting the watchdog below catch the case where it never comes back.
     };
