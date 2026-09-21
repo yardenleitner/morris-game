@@ -3,35 +3,55 @@ setlocal enabledelayedexpansion
 cd /d "%~dp0"
 title Morris game server
 
+rem Closing the console window does not always take the server with it, which
+rem leaves port 3000 held by the previous build. Clear it before starting so a
+rem stale process can never quietly serve yesterday's code.
+for /f "usebackq tokens=*" %%p in (`powershell -NoProfile -Command "@(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue).OwningProcess"`) do (
+  echo Stopping leftover server, PID %%p
+  taskkill /PID %%p /F >nul 2>&1
+)
+
 echo Building...
 call npm run build
 if errorlevel 1 (
   echo.
-  echo BUILD FAILED - not starting. Fix the error above, or run "npm start" to
-  echo launch the previous working build.
+  echo BUILD FAILED - not starting. Fix the error above, or run
+  echo    node node_modules\next\dist\bin\next start
+  echo to launch the previous working build.
   echo.
   pause
   exit /b 1
 )
 
-rem Read the Wi-Fi address fresh each run: it is handed out by DHCP and changes
-rem between networks, and the phones need whatever it is today.
+rem No pipes in this command on purpose: inside a for/f backtick block, cmd does
+rem not unescape ^| before handing the string to PowerShell, so a piped version
+rem fails silently and every URL below falls back to localhost.
 set IP=
-for /f "usebackq tokens=*" %%i in (`powershell -NoProfile -Command "(Get-NetIPAddress -AddressFamily IPv4 ^| Where-Object { $_.PrefixOrigin -eq 'Dhcp' -and $_.InterfaceAlias -notlike '*vEthernet*' } ^| Select-Object -First 1).IPAddress"`) do set IP=%%i
-if "!IP!"=="" set IP=localhost
+for /f "usebackq tokens=*" %%i in (`powershell -NoProfile -Command "@(Get-NetIPAddress -AddressFamily IPv4 -PrefixOrigin Dhcp)[0].IPAddress"`) do set IP=%%i
 
 echo.
-echo  ===========================================================
-echo    Host control : http://localhost:3000/host
-echo    Projector    : http://localhost:3000/screen
+if "!IP!"=="" (
+  echo  ===========================================================
+  echo    COULD NOT DETECT THIS LAPTOP'S WI-FI ADDRESS
+  echo    Run  ipconfig  and read the IPv4 Address, then open
+  echo    http://THAT-ADDRESS:3000/play on the phones.
+  echo  ===========================================================
+) else (
+  echo  ===========================================================
+  echo    Open these on ANY device on this Wi-Fi:
+  echo.
+  echo      Host control : http://!IP!:3000/host
+  echo      Projector    : http://!IP!:3000/screen
+  echo      Reps' phones : http://!IP!:3000/play
+  echo.
+  echo    On this laptop, http://localhost:3000 also works.
+  echo  ===========================================================
+)
 echo.
-echo    Reps' phones : http://!IP!:3000/play
-echo    (phones must be on the same Wi-Fi as this laptop)
-echo  ===========================================================
-echo.
-echo  Scores are saved to data\state.json - closing this window or
-echo  restarting does not lose the game.
+echo  Scores are saved to data\state.json - restarting loses nothing.
+echo  Press Ctrl+C in this window to stop the server.
 echo.
 
-call npm start
-pause
+rem Run node directly rather than through npm: fewer wrapper processes between
+rem this window and the server, so Ctrl+C and closing the window actually reach it.
+node node_modules\next\dist\bin\next start
