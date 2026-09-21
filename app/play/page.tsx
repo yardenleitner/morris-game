@@ -27,7 +27,6 @@ export default function PlayPage() {
   const [nameInput, setNameInput] = useState('');
   const [pickedSector, setPickedSector] = useState<SectorId | null>(null);
   const [joining, setJoining] = useState(false);
-  const [pressing, setPressing] = useState(false);
   const [voted, setVoted] = useState(false);
   const voteRemaining = useCountdown(game && game.stage === 'truefalse' ? game.timer_ends_at : null);
 
@@ -122,7 +121,10 @@ export default function PlayPage() {
   const otherLocked = game.buzzer_locked_by && game.buzzer_locked_by !== mySector;
   const lockedSectorName = otherLocked ? sectors.find((s) => s.id === game.buzzer_locked_by)?.name : null;
   const excluded = game.round_excluded.includes(mySector);
-  const canBuzz = game.stage === 'trivia' && game.buzzer_open && !game.buzzer_locked_by && !excluded && !me.disqualified;
+  // Deliberately NOT a gate on the button. The phone never decides whether a press
+  // counts — press_buzzer on the server does — so this only drives how the button
+  // looks: lit while the round is still there to win, calm once it is gone.
+  const liveRound = game.buzzer_open && !game.buzzer_locked_by && !excluded;
   const alreadyVoted = game.current_votes[mySector] !== undefined;
   const voteTimeUp = voteRemaining === 0;
 
@@ -153,23 +155,25 @@ export default function PlayPage() {
           {iAmLocked && <BigMsg color="var(--gold)">אתה ראשון — ענה עכשיו!</BigMsg>}
           {otherLocked && <BigMsg color="var(--muted)">{lockedSectorName} לחץ/ה ראשון/ה</BigMsg>}
           {!game.buzzer_open && !game.buzzer_locked_by && <p className="text-[var(--muted)] text-lg">הבאזר סגור — המתן/י למנחה</p>}
-          {excluded && !game.buzzer_locked_by && <p className="text-[var(--muted)] text-lg">נפסלת בסיבוב הזה — המתן/י לשאלה הבאה</p>}
+          {excluded && !game.buzzer_locked_by && <p className="text-[var(--muted)] text-lg">כבר עניתם בשאלה הזו — הסיבוב הזה שייך לאחרים</p>}
           <button
-            disabled={!canBuzz || pressing}
-            onClick={async () => {
-              setPressing(true);
-              await playerAction('press_buzzer', { p_sector_id: mySector, p_round_id: game.round_id }).catch(() => {});
-              setPressing(false);
+            onClick={() => {
+              // Fire and forget: no disabled state, no in-flight lock, nothing that
+              // could swallow a press. Every tap reaches the server and is heard on
+              // the big screen, even if this sector cannot win the round.
+              playerAction('press_buzzer', { p_sector_id: mySector, p_round_id: game.round_id }).catch(() => {});
             }}
-            className="rounded-full font-black text-3xl disabled:opacity-30"
+            className="rounded-full font-black text-3xl active:scale-95 transition-transform"
             style={{
               width: 'min(280px,68vw)', aspectRatio: '1',
               background: iAmLocked
                 ? 'radial-gradient(circle at 35% 28%,#fff3c8,#f5c451 62%,#b9860f)'
                 : 'radial-gradient(circle at 35% 28%,#ffecb7,#ea7c19 62%,#87310f)',
-              boxShadow: canBuzz ? '0 0 0 12px #f8af3825,0 0 0 22px #f8af3815,0 14px 0 #70220e,0 22px 40px #000b' : '0 14px 0 #1c1c1c,0 22px 40px #000b',
+              boxShadow: liveRound ? '0 0 0 12px #f8af3825,0 0 0 22px #f8af3815,0 14px 0 #70220e,0 22px 40px #000b' : '0 14px 0 #70220e,0 22px 40px #000b',
               color: '#351300',
-              filter: canBuzz || iAmLocked ? 'none' : 'grayscale(1)',
+              // never greyed out — a dead-looking button is the one thing that stops
+              // a rep from pressing, and pressing is always allowed now
+              filter: 'none',
             }}
           >
             באזר

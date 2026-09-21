@@ -49,9 +49,10 @@ if "!IP!"=="" (
 )
 echo.
 echo  Scores are saved to data\state.json - restarting loses nothing.
-echo  Press Ctrl+C in this window to stop the server.
+echo  Closing this window stops the server.
 echo.
 
-rem Run node directly rather than through npm: fewer wrapper processes between
-rem this window and the server, so Ctrl+C and closing the window actually reach it.
-node node_modules\next\dist\bin\next start
+rem The server runs inside a kill-on-close job object (scripts\run-server.ps1), so
+rem closing this window - or Ctrl+C, or killing this window from Task Manager - takes
+rem the node process down with it instead of leaving port 3000 held by an orphan.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\run-server.ps1"

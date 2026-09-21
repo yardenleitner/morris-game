@@ -13,6 +13,17 @@ export interface Sector {
   updated_at: string;
 }
 
+// Every press of a phone's buzzer, winner or not. The screen sounds one buzzer
+// per event, so the room hears all five reps slam the button rather than only the
+// one the server happened to receive first. `won` marks the press that actually
+// claimed the round.
+export interface BuzzEvent {
+  id: number;
+  sector_id: SectorId;
+  at: string;
+  won: boolean;
+}
+
 export type Stage = 'title' | 'boarding' | 'rules' | 'trivia' | 'truefalse' | 'speech' | 'leaderboard' | 'end';
 
 export interface GameState {
@@ -38,6 +49,7 @@ export interface GameState {
   buzzer_open: boolean;
   buzzer_locked_by: SectorId | null;
   buzzer_locked_at: string | null;
+  buzz_events: BuzzEvent[];
 
   timer_ends_at: string | null;
   timer_seconds: number | null;

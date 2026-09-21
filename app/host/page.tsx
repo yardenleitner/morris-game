@@ -5,6 +5,7 @@ import { HOST_KEY } from '@/lib/config';
 import { hostAction as call } from '@/lib/actions';
 import { useLiveGame } from '@/lib/useLiveGame';
 import { IconCheck, IconX, IconPlay } from '@/lib/icons';
+import { ScoreBar, scoreScale } from '@/lib/ScoreBar';
 import { Stage, TriviaQuestion, TrueFalseStory, SpeechWord } from '@/lib/types';
 
 // Loading a question/story also opens the buzzer / starts the 15s timer and clears
@@ -254,6 +255,7 @@ function SpeechControls({ game, words }: { game: any; words: SpeechWord[] }) {
 
 // Read-only standings — no per-sector controls; scoring is fully automatic now.
 function SectorsGrid({ sectors }: { sectors: any[] }) {
+  const max = scoreScale(sectors.map((s) => s.score));
   return (
     <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
       {sectors.map((s) => (
@@ -263,6 +265,7 @@ function SectorsGrid({ sectors }: { sectors: any[] }) {
             <span className={`w-2.5 h-2.5 rounded-full ${s.connected ? 'bg-green-400' : 'bg-white/20'}`} />
           </div>
           <div className="text-sm text-[var(--muted)] truncate">{s.rep_name || 'לא הצטרף'}</div>
+          <div className="mt-2"><ScoreBar value={s.score} max={max} color={s.color} /></div>
           <div className="text-2xl font-black mt-1">{s.score}</div>
         </div>
       ))}

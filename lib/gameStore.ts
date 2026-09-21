@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { SEED_CONTENT } from './seedContent';
-import { GameState, PublicState, Sector, SectorId, SpeechWord, TriviaQuestion, TrueFalseStory } from './types';
+import { BuzzEvent, GameState, PublicState, Sector, SectorId, SpeechWord, TriviaQuestion, TrueFalseStory } from './types';
 
 // Server-side game state. Never import this from a 'use client' component —
 // it holds the answer key, and it only exists in the Next.js process.
@@ -14,6 +14,16 @@ import { GameState, PublicState, Sector, SectorId, SpeechWord, TriviaQuestion, T
 // where each request would get its own empty copy of this module.
 
 const STATE_FILE = join(process.cwd(), 'data', 'state.json');
+
+// One point for a correct answer, one point off for a wrong one — the scale the
+// question sheet is written against. Kept on the game row (rather than inlined at
+// the award sites) so a host could still retune it mid-show via host_set_scoring.
+const SCORING = { correct: 1, wrong: -1 };
+
+// How many recent buzzer presses to keep on the game row. It only has to cover one
+// round's worth of simultaneous slams: the screen sounds each unseen id once and
+// then forgets it, so this is a broadcast buffer, not a history.
+const BUZZ_LOG_SIZE = 24;
 
 const SECTOR_SEED: { id: SectorId; name: string; color: string }[] = [
   { id: '452', name: 'מדור 452', color: '#f5a623' },
@@ -32,6 +42,9 @@ export interface StoreState {
   // round_id -> sector that got there first. Replaces the buzz_winner table's
   // primary key, which is what used to make the race unambiguous.
   buzzWinners: Record<string, string>;
+  // Monotonic id for buzz events. Kept outside the game row so it keeps climbing
+  // across rounds; the screen only ever compares ids, never their absolute value.
+  buzzSeq: number;
 }
 
 const now = () => new Date().toISOString();
@@ -57,10 +70,11 @@ function freshState(): StoreState {
       buzzer_open: false,
       buzzer_locked_by: null,
       buzzer_locked_at: null,
+      buzz_events: [],
       timer_ends_at: null,
       timer_seconds: null,
-      scoring_correct: 100,
-      scoring_wrong: 0,
+      scoring_correct: SCORING.correct,
+      scoring_wrong: SCORING.wrong,
       winner_sector_id: null,
       updated_at: now(),
     },
@@ -78,6 +92,7 @@ function freshState(): StoreState {
     stories: SEED_CONTENT.stories.map((s) => ({ ...s, id: randomUUID(), used: false })),
     words: SEED_CONTENT.words.map((w) => ({ ...w, id: randomUUID() })),
     buzzWinners: {},
+    buzzSeq: 0,
   };
 }
 
@@ -105,7 +120,12 @@ function persist(state: StoreState) {
 function load(): StoreState {
   if (holder.state) return holder.state;
   try {
-    holder.state = JSON.parse(readFileSync(STATE_FILE, 'utf8')) as StoreState;
+    const parsed = JSON.parse(readFileSync(STATE_FILE, 'utf8')) as StoreState;
+    // A state file written by an older build predates the buzz log. Fill it in
+    // rather than throwing the evening's scores away over a missing array.
+    parsed.buzzSeq ??= 0;
+    parsed.game.buzz_events ??= [];
+    holder.state = parsed;
   } catch {
     const fresh = freshState();
     persist(fresh);
@@ -177,8 +197,11 @@ export const HOST_ACTIONS: Record<string, Handler> = {
       buzzer_open: false,
       buzzer_locked_by: null,
       buzzer_locked_at: null,
+      buzz_events: [],
       timer_ends_at: null,
       timer_seconds: null,
+      scoring_correct: SCORING.correct,
+      scoring_wrong: SCORING.wrong,
       winner_sector_id: null,
     });
   },
@@ -358,29 +381,42 @@ export const PLAYER_ACTIONS: Record<string, Handler> = {
     sec.updated_at = now();
   },
 
-  // Returns whether this press won the round. Node runs these one at a time, so
-  // the first request to reach the check is the winner and later ones see the
-  // round already claimed — the same guarantee the old unique index gave.
+  // Returns whether this press won the round.
+  //
+  // Phones never gate their own buzzer — every press arrives here and is logged so
+  // the screen can sound it, and this function alone decides who actually claimed
+  // the round. Node runs these one at a time, so the first request to reach the
+  // eligibility check wins and later ones see the round already taken, which is the
+  // same guarantee the old unique index gave.
   press_buzzer(s, a): boolean {
     const { p_sector_id: sectorId, p_round_id: roundId } = a;
-    if (s.game.round_id !== roundId) return false;
-    if (!s.game.buzzer_open) return false;
-    if (s.game.round_excluded.includes(sectorId)) return false;
-    if (s.buzzWinners[roundId]) return false;
-
-    s.buzzWinners[roundId] = sectorId;
-    Object.assign(s.game, {
-      buzzer_open: false,
-      buzzer_locked_by: sectorId,
-      buzzer_locked_at: now(),
-      last_award_correct: null,
-    });
     const sec = sectorOf(s, sectorId);
-    if (sec) {
+    if (!sec) return false;
+
+    // A press can be heard but still not win: the round may have moved on, the
+    // buzzer may be shut, this sector may already have missed this question, or
+    // somebody simply got here first.
+    const won =
+      s.game.round_id === roundId &&
+      s.game.buzzer_open &&
+      !s.game.round_excluded.includes(sectorId) &&
+      !s.buzzWinners[roundId];
+
+    if (won) {
+      s.buzzWinners[roundId] = sectorId;
+      Object.assign(s.game, {
+        buzzer_open: false,
+        buzzer_locked_by: sectorId,
+        buzzer_locked_at: now(),
+        last_award_correct: null,
+      });
       sec.first_buzz_count += 1;
       sec.updated_at = now();
     }
-    return true;
+
+    const event: BuzzEvent = { id: ++s.buzzSeq, sector_id: sectorId, at: now(), won };
+    s.game.buzz_events = [...s.game.buzz_events, event].slice(-BUZZ_LOG_SIZE);
+    return won;
   },
 
   submit_vote(s, a) {

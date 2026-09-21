@@ -4,7 +4,9 @@ import { QRCodeSVG } from 'qrcode.react';
 import confetti from 'canvas-confetti';
 import { useLiveGame } from '@/lib/useLiveGame';
 import { IconTrophy, IconPlay, IconPause } from '@/lib/icons';
-import { Sector } from '@/lib/types';
+import { ScoreBar, ScoreGauge, scoreScale } from '@/lib/ScoreBar';
+import { BUZZER_GAIN, BUZZER_SOUND, CORRECT_SOUND, playSfx, preloadSfx } from '@/lib/sfx';
+import { BuzzEvent, GameState, Sector } from '@/lib/types';
 
 const VOLUME_KEY = 'morris-music-volume';
 const PAUSED_KEY = 'morris-music-paused';
@@ -94,9 +96,45 @@ function MusicControls({
   );
 }
 
+// Sounds one buzzer per press the server has logged.
+//
+// The screen is the room's speaker, so it plays every press rather than only the
+// winning one: if four reps slam the button at once, four buzzers land together.
+// Ids only ever climb, so "what have I already played" is a single number.
+function useBuzzSounds(events: BuzzEvent[] | undefined) {
+  const playedUpTo = useRef<number | null>(null);
+
+  useEffect(() => {
+    const log = events ?? [];
+    const highest = log.reduce((max, e) => Math.max(max, e.id), 0);
+
+    // First snapshot only arms the ref. Opening or refreshing /screen replays the
+    // whole log, and none of it is news — those presses already happened.
+    if (playedUpTo.current === null) { playedUpTo.current = highest; return; }
+    // A host reset rewinds the counter; re-arm instead of replaying the backlog.
+    if (highest < playedUpTo.current) { playedUpTo.current = highest; return; }
+
+    const fresh = log.filter((e) => e.id > playedUpTo.current!);
+    if (!fresh.length) return;
+    playedUpTo.current = highest;
+
+    // All at once — presses that arrived together should be heard together.
+    //
+    // The detune is keyed on the event id, not on this batch's index. Each press
+    // commits and broadcasts on its own, so near-simultaneous slams arrive as
+    // separate pushes that each look like "one new event"; indexing by batch gave
+    // every voice the same rate, and identical samples fired micro-seconds apart
+    // are phase-aligned — five buzzers summing into one louder buzzer. Off the id,
+    // consecutive presses always differ and the pile-up sounds like a pile-up.
+    fresh.forEach((e) => playSfx(BUZZER_SOUND, BUZZER_GAIN, 1 + (e.id % 4) * 0.035));
+  }, [events]);
+}
+
 export default function ScreenPage() {
   const { game, sectors, loading } = useLiveGame();
   const musicActive = !!game;
+  useEffect(() => { preloadSfx(BUZZER_SOUND, CORRECT_SOUND); }, []);
+  useBuzzSounds(game?.buzz_events);
   const { ref: musicRef, needsTap, paused, volume, setVolume, enableSound, togglePaused } = useThemeMusic(musicActive);
 
   if (loading || !game) {
@@ -119,17 +157,20 @@ export default function ScreenPage() {
   let content: React.ReactNode;
   if (game.stage === 'title') content = <TitleScreen />;
   else if (game.stage === 'boarding') content = <BoardingScreen sectors={sectors} />;
-  else if (game.stage === 'rules') content = <RulesScreen />;
+  else if (game.stage === 'rules') content = <RulesScreen game={game} />;
   else if (game.stage === 'end') content = <WinnerScreen sectors={sectors} />;
   else {
     content = (
       <main className="flex-1 flex flex-col p-6 gap-5">
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center min-h-0">
           {game.stage === 'trivia' && <Trivia game={game} sectors={sectors} />}
           {game.stage === 'truefalse' && <TrueFalse game={game} sectors={sectors} />}
           {game.stage === 'speech' && <Speech game={game} />}
           {game.stage === 'leaderboard' && <Leaderboard sectors={sectors} />}
         </div>
+        {/* the leaderboard is already a full-screen ranking — a gauge under it would
+            just say the same thing twice */}
+        {game.stage !== 'leaderboard' && <ScoreGauge sectors={sectors} lockedBy={game.buzzer_locked_by} />}
       </main>
     );
   }
@@ -191,10 +232,14 @@ function BoardingScreen({ sectors }: { sectors: Sector[] }) {
   );
 }
 
-function RulesScreen() {
+// Point values are read off the game row rather than written into the copy, so the
+// rules the room is shown can't drift from what scoring actually does.
+function RulesScreen({ game }: { game: GameState }) {
+  const plus = `+${game.scoring_correct}`;
+  const minus = `${game.scoring_wrong}`;
   const rules = [
-    { title: 'סבב טריוויה', body: 'הבאזר נפתח עם כל שאלה. מי שלוחצ/ת ראשון/ה עונה בקול. תשובה נכונה: 100+ נקודות. תשובה שגויה: 100- נקודות, והבאזר נפתח שוב לשאר המדורים.' },
-    { title: 'קרה / לא קרה', body: 'כל מדור מצביע מהטלפון — "קרה" או "לא קרה" — לפני שנגמרות 15 השניות. אותו ניקוד: 100+ על תשובה נכונה, 100- על תשובה שגויה.' },
+    { title: 'סבב טריוויה', body: `הבאזר נפתח עם כל שאלה. מי שלוחצ/ת ראשון/ה עונה בקול. תשובה נכונה: ${plus} נקודות. תשובה שגויה: ${minus} נקודות, והבאזר נפתח שוב לשאר המדורים.` },
+    { title: 'קרה / לא קרה', body: `כל מדור מצביע מהטלפון — "קרה" או "לא קרה" — לפני שנגמרות 15 השניות. אותו ניקוד: ${plus} על תשובה נכונה, ${minus} על תשובה שגויה.` },
     { title: 'נאומי הפרידה · מילות מוקש', body: 'בסבב האחרון כל דובר/ת מקבל/ת מילה שחייבים לשלב בנאום בלי שישימו לב.' },
   ];
   return (
@@ -272,9 +317,9 @@ function Trivia({ game, sectors }: { game: any; sectors: Sector[] }) {
       firedFor.current = key;
       if (game.last_award_correct === true) {
         confetti({ particleCount: 160, spread: 80, origin: { y: 0.5 }, colors: ['#ffcf63', '#eb9b2a', '#58a9ff', '#ffffff'] });
-        new Audio('/sounds/correct.mp3').play().catch(() => {});
+        playSfx(CORRECT_SOUND, 2);
       } else {
-        new Audio('/sounds/buzzer.mp3').play().catch(() => {});
+        playSfx(BUZZER_SOUND, BUZZER_GAIN);
       }
     }
   }, [game.current_question_id, game.winner_sector_id, game.last_award_correct]);
@@ -329,8 +374,7 @@ function Trivia({ game, sectors }: { game: any; sectors: Sector[] }) {
           </span>
         )}
       </div>
-      <div className="mt-auto flex items-center justify-between">
-        <ScoreStrip sectors={sectors} lockedBy={game.buzzer_locked_by} />
+      <div className="mt-auto flex items-center justify-end">
         <Timer endsAt={game.timer_ends_at} />
       </div>
     </Card>
@@ -339,6 +383,7 @@ function Trivia({ game, sectors }: { game: any; sectors: Sector[] }) {
 
 function TrueFalse({ game, sectors }: { game: any; sectors: Sector[] }) {
   const revealed = game.revealed_is_true !== null;
+  const max = scoreScale(sectors.map((s) => s.score));
   return (
     <Card>
       <LiveHeader left="קרה או לא קרה" />
@@ -354,7 +399,8 @@ function TrueFalse({ game, sectors }: { game: any; sectors: Sector[] }) {
             const vote = game.current_votes[s.id];
             return (
               <div key={s.id} className="rounded-2xl px-5 py-3.5 text-center min-w-[120px]" style={{ border: `2px solid ${s.color}` }}>
-                <div className="font-extrabold" style={{ color: s.color }}>{s.name}</div>
+                <ScoreBar value={s.score} max={max} color={s.color} />
+                <div className="font-extrabold mt-2" style={{ color: s.color }}>{s.name}</div>
                 <div className="text-lg mt-1 font-bold">{vote === undefined ? '...' : vote ? 'קרה' : 'לא קרה'}</div>
               </div>
             );
@@ -380,6 +426,7 @@ function Speech({ game }: { game: any }) {
 
 function Leaderboard({ sectors }: { sectors: Sector[] }) {
   const ranked = [...sectors].sort((a, b) => b.score - a.score);
+  const max = scoreScale(ranked.map((s) => s.score));
   return (
     <Card>
       <div className="text-center text-[var(--gold)] font-extrabold text-sm tracking-widest">טבלת מובילים</div>
@@ -387,28 +434,18 @@ function Leaderboard({ sectors }: { sectors: Sector[] }) {
         {ranked.map((s, i) => (
           <div
             key={s.id}
-            className="flex items-center justify-between rounded-2xl px-6 py-3.5"
+            className="rounded-2xl px-6 py-3.5"
             style={{ border: `2px solid ${i === 0 ? 'var(--gold)' : '#4d64aa'}`, background: '#0c1642cc', boxShadow: i === 0 ? '0 0 20px #ffbd3d55' : 'none' }}
           >
-            <span className="font-black text-xl" style={{ color: i === 0 ? 'var(--gold)' : '#fff' }}>#{i + 1} · {s.name}</span>
-            <span className="font-black text-2xl">{s.score}</span>
+            <ScoreBar value={s.score} max={max} color={s.color} height={10} />
+            <div className="flex items-center justify-between mt-2.5">
+              <span className="font-black text-xl" style={{ color: i === 0 ? 'var(--gold)' : '#fff' }}>#{i + 1} · {s.name}</span>
+              <span className="font-black text-2xl">{s.score}</span>
+            </div>
           </div>
         ))}
       </div>
     </Card>
-  );
-}
-
-function ScoreStrip({ sectors, lockedBy }: { sectors: Sector[]; lockedBy: string | null }) {
-  return (
-    <div className="flex gap-2.5">
-      {sectors.map((s) => (
-        <div key={s.id} className={`text-center rounded-xl px-3.5 py-2 min-w-[96px] ${lockedBy === s.id ? 'flash' : ''}`} style={{ background: '#0a1239d9', border: `1px solid ${lockedBy === s.id ? 'var(--gold)' : '#314786'}`, color: 'var(--muted)' }}>
-          <strong className="text-lg text-white block">{s.score}</strong>
-          <span className="text-xs">{s.id}</span>
-        </div>
-      ))}
-    </div>
   );
 }
 
