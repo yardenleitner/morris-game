@@ -45,6 +45,9 @@ export interface GameState {
 
   current_word: string | null;
   current_word_index: number;
+  // Whether the host judged the speech currently on screen a success. null while
+  // the speaker is still going.
+  speech_result: boolean | null;
 
   buzzer_open: boolean;
   buzzer_locked_by: SectorId | null;
@@ -85,6 +88,14 @@ export interface SpeechWord {
 }
 
 export const SECTOR_IDS: SectorId[] = ['452', '454', '455', '456', '458'];
+
+// The closing round is one speech per sector, in this fixed order, so the word at
+// order_index N belongs to SPEECH_ORDER[N - 1]. Its length is also what bounds the
+// round: five speakers, five words, however many words the content table holds.
+export const SPEECH_ORDER: SectorId[] = ['452', '454', '455', '456', '458'];
+
+export const speakerForWordIndex = (index: number): SectorId | null =>
+  SPEECH_ORDER[index - 1] ?? null;
 
 // Starting content for a brand-new state file. Ids and `used` flags are assigned
 // at that point, so the seed itself carries neither.

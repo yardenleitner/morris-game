@@ -5,8 +5,8 @@ import confetti from 'canvas-confetti';
 import { useLiveGame } from '@/lib/useLiveGame';
 import { IconTrophy, IconPlay, IconPause } from '@/lib/icons';
 import { ScoreBar, ScoreGauge, scoreScale } from '@/lib/ScoreBar';
-import { BUZZER_GAIN, BUZZER_SOUND, CORRECT_SOUND, WRONG_SOUND, playSfx, preloadSfx } from '@/lib/sfx';
-import { BuzzEvent, GameState, Sector } from '@/lib/types';
+import { BUZZER_GAIN, BUZZER_SOUND, CORRECT_SOUND, WRONG_GAIN, WRONG_SOUND, playSfx, preloadSfx } from '@/lib/sfx';
+import { BuzzEvent, GameState, Sector, SPEECH_ORDER, speakerForWordIndex } from '@/lib/types';
 
 const VOLUME_KEY = 'morris-music-volume';
 const PAUSED_KEY = 'morris-music-paused';
@@ -165,7 +165,7 @@ export default function ScreenPage() {
         <div className="flex-1 flex items-center justify-center min-h-0">
           {game.stage === 'trivia' && <Trivia game={game} sectors={sectors} />}
           {game.stage === 'truefalse' && <TrueFalse game={game} sectors={sectors} />}
-          {game.stage === 'speech' && <Speech game={game} />}
+          {game.stage === 'speech' && <Speech game={game} sectors={sectors} />}
           {game.stage === 'leaderboard' && <Leaderboard sectors={sectors} />}
         </div>
         {/* the leaderboard is already a full-screen ranking — a gauge under it would
@@ -319,7 +319,7 @@ function Trivia({ game, sectors }: { game: any; sectors: Sector[] }) {
         confetti({ particleCount: 160, spread: 80, origin: { y: 0.5 }, colors: ['#ffcf63', '#eb9b2a', '#58a9ff', '#ffffff'] });
         playSfx(CORRECT_SOUND, 2);
       } else {
-        playSfx(WRONG_SOUND, 2);
+        playSfx(WRONG_SOUND, WRONG_GAIN);
       }
     }
   }, [game.current_question_id, game.winner_sector_id, game.last_award_correct]);
@@ -411,13 +411,25 @@ function TrueFalse({ game, sectors }: { game: any; sectors: Sector[] }) {
   );
 }
 
-function Speech({ game }: { game: any }) {
+function Speech({ game, sectors }: { game: any; sectors: Sector[] }) {
+  const speaker = sectors.find((s) => s.id === speakerForWordIndex(game.current_word_index));
+  const judged = game.speech_result !== null;
   return (
     <Card>
-      <LiveHeader left="שלב נאומי הפרידה · מילות מוקש" />
-      <div className="flex-1 flex flex-col items-center justify-center gap-7 text-center">
-        <div className="text-lg text-[var(--muted)]">המילה הבאה שיש לשלב בנאום:</div>
-        <div className="font-black gold-text" style={{ fontSize: 'clamp(52px,9vw,110px)' }}>{game.current_word}</div>
+      <LiveHeader left={`שלב נאומי הפרידה · מילות מוקש · ${Math.min(game.current_word_index, SPEECH_ORDER.length)}/${SPEECH_ORDER.length}`} />
+      <div className="flex-1 flex flex-col items-center justify-center gap-5 text-center">
+        {speaker && (
+          <div className="text-2xl font-black" style={{ color: speaker.color }}>{speaker.name}</div>
+        )}
+        <div className="text-lg text-[var(--muted)]">המילה שיש לשלב בנאום:</div>
+        <div className="font-black gold-text" style={{ fontSize: 'clamp(44px,8vw,96px)' }}>{game.current_word}</div>
+        {judged && (
+          <div className="pop-in px-6 py-2.5 rounded-full font-extrabold text-lg" style={game.speech_result
+            ? { background: '#153e1f', border: '1px solid #4ade80', color: '#7bda92' }
+            : { background: '#4a1a1a', border: '1px solid #ee6d75', color: '#ff9d9d' }}>
+            {game.speech_result ? 'שילב/ה את המילה! +3' : 'לא שילב/ה · -3'}
+          </div>
+        )}
       </div>
       <div className="flex justify-center"><Timer endsAt={game.timer_ends_at} /></div>
     </Card>

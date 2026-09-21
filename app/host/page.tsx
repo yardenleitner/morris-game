@@ -6,7 +6,7 @@ import { hostAction as call } from '@/lib/actions';
 import { useLiveGame } from '@/lib/useLiveGame';
 import { IconCheck, IconX, IconPlay } from '@/lib/icons';
 import { ScoreBar, scoreScale } from '@/lib/ScoreBar';
-import { Stage, TriviaQuestion, TrueFalseStory, SpeechWord } from '@/lib/types';
+import { Stage, TriviaQuestion, TrueFalseStory, SpeechWord, SPEECH_ORDER, speakerForWordIndex } from '@/lib/types';
 
 // Loading a question/story also opens the buzzer / starts the 15s timer and clears
 // the previous reveal (see the host_load_* RPCs) — one call does the whole "next" step.
@@ -25,9 +25,12 @@ async function loadNextStory(stories: TrueFalseStory[], onUsed: () => void) {
 }
 
 // speech_words has no "used" flag — it's inherently ordered, so "next" is just the
-// smallest order_index past whatever word is currently showing.
+// smallest order_index past whatever word is currently showing. The round stops at
+// SPEECH_ORDER.length: one speech per sector, however many words the table holds.
 async function loadNextWord(game: any, words: SpeechWord[]) {
-  const next = [...words].filter((w) => w.order_index > (game.current_word_index || 0)).sort((a, b) => a.order_index - b.order_index)[0];
+  const next = [...words]
+    .filter((w) => w.order_index > (game.current_word_index || 0) && w.order_index <= SPEECH_ORDER.length)
+    .sort((a, b) => a.order_index - b.order_index)[0];
   if (!next) return;
   await call('host_set_speech_word', { p_index: next.order_index });
 }
@@ -72,7 +75,7 @@ export default function HostPage() {
       {game.stage === 'rules' && <RulesStage questions={questions} onUsed={loadContent} />}
       {game.stage === 'trivia' && <TriviaControls game={game} questions={questions} stories={stories} sectors={sectors} onUsed={loadContent} />}
       {game.stage === 'truefalse' && <TrueFalseControls game={game} stories={stories} words={words} onUsed={loadContent} />}
-      {game.stage === 'speech' && <SpeechControls game={game} words={words} />}
+      {game.stage === 'speech' && <SpeechControls game={game} words={words} sectors={sectors} />}
       {(game.stage === 'leaderboard' || game.stage === 'end') && <EndControls stage={game.stage} />}
 
       {(game.stage === 'trivia' || game.stage === 'truefalse' || game.stage === 'speech') && (
@@ -233,20 +236,65 @@ function TrueFalseControls({ game, stories, words, onUsed }: any) {
   );
 }
 
-function SpeechControls({ game, words }: { game: any; words: SpeechWord[] }) {
-  const maxIndex = Math.max(0, ...words.map((w) => w.order_index));
-  const isLastWord = words.length > 0 && game.current_word_index >= maxIndex;
+// One speech per sector in SPEECH_ORDER. The host judges each one, worth three
+// points either way, and only then moves on -- so a speaker cannot be skipped
+// unscored, and "who is up" is answered by position rather than by memory.
+function SpeechControls({ game, words, sectors }: { game: any; words: SpeechWord[]; sectors: any[] }) {
+  const total = SPEECH_ORDER.length;
+  const speakerId = speakerForWordIndex(game.current_word_index);
+  const speaker = sectors.find((s) => s.id === speakerId);
+  const judged = game.speech_result !== null;
+  const isLastSpeaker = game.current_word_index >= total;
+  const word = words.find((w) => w.order_index === game.current_word_index);
 
   return (
     <section className="host-card p-6 flex flex-col items-center gap-4 text-center">
-      <h2 className="font-bold text-[var(--gold)]">שלב נאומי פרידה · מילה {game.current_word_index} מתוך {words.length}</h2>
-      {isLastWord ? (
-        <button onClick={() => call('host_set_stage', { p_stage: 'leaderboard' })} className="btn gold text-lg px-6 py-3 flex items-center gap-1.5">
-          הצג טבלת מובילים <IconPlay />
-        </button>
+      <h2 className="font-bold text-[var(--gold)]">
+        שלב נאומי פרידה · נואם/ת {Math.min(game.current_word_index, total)} מתוך {total}
+      </h2>
+
+      {speaker ? (
+        <>
+          <div className="text-lg">
+            נואם/ת: <b style={{ color: speaker.color }}>{speaker.name}</b>
+            {word && <> · מילת מוקש: <b className="text-[var(--gold)]">{word.word}</b></>}
+          </div>
+
+          {judged ? (
+            <>
+              <span className={`text-lg font-bold ${game.speech_result ? 'text-green-400' : 'text-[#ff9d9d]'}`}>
+                {game.speech_result ? `${speaker.name} הצליח/ה! +3` : `${speaker.name} לא הצליח/ה · -3`}
+              </span>
+              {isLastSpeaker ? (
+                <button onClick={() => call('host_set_stage', { p_stage: 'leaderboard' })} className="btn gold text-lg px-6 py-3 flex items-center gap-1.5">
+                  הצג טבלת מובילים <IconPlay />
+                </button>
+              ) : (
+                <button onClick={() => loadNextWord(game, words)} className="btn gold text-lg px-6 py-3 flex items-center gap-1.5">
+                  הנואם/ת הבא/ה <IconPlay />
+                </button>
+              )}
+            </>
+          ) : (
+            <div className="flex gap-3">
+              <button
+                onClick={() => call('host_award_speech', { p_sector_id: speaker.id, p_success: true })}
+                className="btn gold text-lg px-6 py-3 flex items-center gap-1.5"
+              >
+                <IconCheck size={16} />שילב/ה את המילה (+3)
+              </button>
+              <button
+                onClick={() => call('host_award_speech', { p_sector_id: speaker.id, p_success: false })}
+                className="btn danger text-lg px-6 py-3 flex items-center gap-1.5"
+              >
+                <IconX size={16} />לא שילב/ה (-3)
+              </button>
+            </div>
+          )}
+        </>
       ) : (
         <button onClick={() => loadNextWord(game, words)} className="btn gold text-lg px-6 py-3 flex items-center gap-1.5">
-          המילה הבאה <IconPlay />
+          התחל את הנואם/ת הראשון/ה <IconPlay />
         </button>
       )}
     </section>

@@ -25,6 +25,9 @@ const SCORING = { correct: 1, wrong: -1 };
 // then forgets it, so this is a broadcast buffer, not a history.
 const BUZZ_LOG_SIZE = 24;
 
+// A closing speech is worth more than a trivia question: three points either way.
+const SPEECH_SCORE = 3;
+
 const SECTOR_SEED: { id: SectorId; name: string; color: string }[] = [
   { id: '452', name: 'מדור 452', color: '#f5a623' },
   { id: '454', name: 'מדור 454', color: '#e8452c' },
@@ -67,6 +70,7 @@ function freshState(): StoreState {
       revealed_is_true: null,
       current_word: null,
       current_word_index: 0,
+      speech_result: null,
       buzzer_open: false,
       buzzer_locked_by: null,
       buzzer_locked_at: null,
@@ -125,6 +129,7 @@ function load(): StoreState {
     // rather than throwing the evening's scores away over a missing array.
     parsed.buzzSeq ??= 0;
     parsed.game.buzz_events ??= [];
+    parsed.game.speech_result ??= null;
     holder.state = parsed;
   } catch {
     const fresh = freshState();
@@ -194,6 +199,7 @@ export const HOST_ACTIONS: Record<string, Handler> = {
       revealed_is_true: null,
       current_word: null,
       current_word_index: 0,
+      speech_result: null,
       buzzer_open: false,
       buzzer_locked_by: null,
       buzzer_locked_at: null,
@@ -361,7 +367,21 @@ export const HOST_ACTIONS: Record<string, Handler> = {
       stage: 'speech',
       current_word: word ? word.word : null,
       current_word_index: a.p_index,
+      // a fresh speaker has not been judged yet
+      speech_result: null,
     });
+  },
+
+  // The host marks each closing speech a success or not; the speaker is whoever
+  // SPEECH_ORDER puts at this word's position, so the host never picks a sector by
+  // hand and the round cannot drift out of order.
+  host_award_speech(s, a) {
+    const sec = sectorOf(s, a.p_sector_id);
+    if (!sec) return;
+    const success = a.p_success === true;
+    sec.score += success ? SPEECH_SCORE : -SPEECH_SCORE;
+    sec.updated_at = now();
+    s.game.speech_result = success;
   },
 
   host_set_disqualified(s, a) {

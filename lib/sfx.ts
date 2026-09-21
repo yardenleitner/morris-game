@@ -17,6 +17,12 @@ export const WRONG_SOUND = '/sounds/wrong-answer.wav';
 // ~4x. Loud on purpose: this fires when a sector buzzes in, over a live crowd.
 export const BUZZER_GAIN = 4;
 
+// The wrong-answer sample is mastered far quieter than the buzzer (RMS 0.062 vs
+// 0.453, peak 0.36 vs 1.0), so matching gains would leave it inaudible next to it.
+// Measured through this exact chain, 26 lands at RMS 0.92 against the buzzer's 1.32
+// and actually distorts less; past ~30 the limiter eats the difference.
+export const WRONG_GAIN = 26;
+
 let ctx: AudioContext | null = null;
 const buffers = new Map<string, Promise<AudioBuffer>>();
 
