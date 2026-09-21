@@ -10,6 +10,9 @@
 
 export const BUZZER_SOUND = '/sounds/buzzer.mp3';
 export const CORRECT_SOUND = '/sounds/correct.mp3';
+// Distinct from BUZZER_SOUND on purpose: the buzzer now means "a phone was
+// pressed", so the host marking an answer wrong needs its own voice.
+export const WRONG_SOUND = '/sounds/wrong-answer.wav';
 
 // ~4x. Loud on purpose: this fires when a sector buzzes in, over a live crowd.
 export const BUZZER_GAIN = 4;
@@ -23,8 +26,27 @@ function context(): AudioContext | null {
     const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AC) return null;
     ctx = new AC();
+    armUnlock(ctx);
   }
   return ctx;
+}
+
+// A context created without a user gesture starts suspended, and on the projector
+// nobody necessarily clicks anything before the first sector buzzes. Resume on the
+// first interaction of any kind so the room is not one silent round behind.
+function armUnlock(ac: AudioContext) {
+  const unlock = () => {
+    ac.resume().catch(() => {});
+    if (ac.state === 'running') detach();
+  };
+  const detach = () => {
+    for (const evt of ['pointerdown', 'keydown', 'touchstart']) {
+      document.removeEventListener(evt, unlock, true);
+    }
+  };
+  for (const evt of ['pointerdown', 'keydown', 'touchstart']) {
+    document.addEventListener(evt, unlock, true);
+  }
 }
 
 function buffer(ac: AudioContext, url: string): Promise<AudioBuffer> {
@@ -54,9 +76,17 @@ export async function playSfx(url: string, gain = 1, rate = 1) {
   const ac = context();
   if (!ac) return fallback(url);
   try {
-    // autoplay policies suspend the context until the page has been interacted
-    // with; by the time anyone buzzes the host has clicked through several screens
-    if (ac.state === 'suspended') await ac.resume();
+    // NEVER await resume(). Chrome leaves that promise pending indefinitely until a
+    // real user gesture arrives, so awaiting it hangs playSfx forever and silently
+    // swallows every press. Ask for a resume and move on.
+    if (ac.state === 'suspended') {
+      ac.resume().catch(() => {});
+      // Still blocked: drop this one rather than queue it. A source started against
+      // a suspended context fires whenever it resumes, which would dump a pile of
+      // stale buzzers into the room the moment somebody finally touches the laptop.
+      const state = ac.state as AudioContextState;
+      if (state !== 'running') return;
+    }
 
     const source = ac.createBufferSource();
     source.buffer = await buffer(ac, url);

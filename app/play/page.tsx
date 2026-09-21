@@ -155,15 +155,17 @@ export default function PlayPage() {
           {iAmLocked && <BigMsg color="var(--gold)">אתה ראשון — ענה עכשיו!</BigMsg>}
           {otherLocked && <BigMsg color="var(--muted)">{lockedSectorName} לחץ/ה ראשון/ה</BigMsg>}
           {!game.buzzer_open && !game.buzzer_locked_by && <p className="text-[var(--muted)] text-lg">הבאזר סגור — המתן/י למנחה</p>}
-          {excluded && !game.buzzer_locked_by && <p className="text-[var(--muted)] text-lg">כבר עניתם בשאלה הזו — הסיבוב הזה שייך לאחרים</p>}
+          {excluded && !game.buzzer_locked_by && <p className="text-[var(--muted)] text-lg">טעיתם בשאלה הזו — הבאזר ננעל עד השאלה הבאה</p>}
           <button
+            // The one case the phone refuses up front: this sector already answered
+            // this question wrong. host_load_question clears round_excluded, so the
+            // lock lifts by itself when the host moves on. Every other state still
+            // lets anyone press — the server decides who actually won the round.
+            disabled={excluded}
             onClick={() => {
-              // Fire and forget: no disabled state, no in-flight lock, nothing that
-              // could swallow a press. Every tap reaches the server and is heard on
-              // the big screen, even if this sector cannot win the round.
               playerAction('press_buzzer', { p_sector_id: mySector, p_round_id: game.round_id }).catch(() => {});
             }}
-            className="rounded-full font-black text-3xl active:scale-95 transition-transform"
+            className="rounded-full font-black text-3xl transition-transform enabled:active:scale-95 disabled:cursor-not-allowed"
             style={{
               width: 'min(280px,68vw)', aspectRatio: '1',
               background: iAmLocked
@@ -171,9 +173,9 @@ export default function PlayPage() {
                 : 'radial-gradient(circle at 35% 28%,#ffecb7,#ea7c19 62%,#87310f)',
               boxShadow: liveRound ? '0 0 0 12px #f8af3825,0 0 0 22px #f8af3815,0 14px 0 #70220e,0 22px 40px #000b' : '0 14px 0 #70220e,0 22px 40px #000b',
               color: '#351300',
-              // never greyed out — a dead-looking button is the one thing that stops
-              // a rep from pressing, and pressing is always allowed now
-              filter: 'none',
+              // grey only while locked out of the question this sector just missed
+              filter: excluded ? 'grayscale(1)' : 'none',
+              opacity: excluded ? 0.4 : 1,
             }}
           >
             באזר

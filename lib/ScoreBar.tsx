@@ -78,11 +78,11 @@ export function ScoreGauge({
             border: `1px solid ${lockedBy === s.id ? 'var(--gold)' : '#314786'}`,
           }}
         >
-          <div className="flex items-baseline justify-between mb-2">
+          <ScoreBar value={s.score} max={max} color={s.color} height={12} />
+          <div className="flex items-baseline justify-between mt-2">
             <span className="font-extrabold text-base" style={{ color: s.color }}>{s.name}</span>
             <strong className="text-2xl font-black text-white tabular-nums">{s.score}</strong>
           </div>
-          <ScoreBar value={s.score} max={max} color={s.color} height={12} />
         </div>
       ))}
     </div>

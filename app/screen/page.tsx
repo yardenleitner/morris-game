@@ -5,7 +5,7 @@ import confetti from 'canvas-confetti';
 import { useLiveGame } from '@/lib/useLiveGame';
 import { IconTrophy, IconPlay, IconPause } from '@/lib/icons';
 import { ScoreBar, ScoreGauge, scoreScale } from '@/lib/ScoreBar';
-import { BUZZER_GAIN, BUZZER_SOUND, CORRECT_SOUND, playSfx, preloadSfx } from '@/lib/sfx';
+import { BUZZER_GAIN, BUZZER_SOUND, CORRECT_SOUND, WRONG_SOUND, playSfx, preloadSfx } from '@/lib/sfx';
 import { BuzzEvent, GameState, Sector } from '@/lib/types';
 
 const VOLUME_KEY = 'morris-music-volume';
@@ -133,7 +133,7 @@ function useBuzzSounds(events: BuzzEvent[] | undefined) {
 export default function ScreenPage() {
   const { game, sectors, loading } = useLiveGame();
   const musicActive = !!game;
-  useEffect(() => { preloadSfx(BUZZER_SOUND, CORRECT_SOUND); }, []);
+  useEffect(() => { preloadSfx(BUZZER_SOUND, CORRECT_SOUND, WRONG_SOUND); }, []);
   useBuzzSounds(game?.buzz_events);
   const { ref: musicRef, needsTap, paused, volume, setVolume, enableSound, togglePaused } = useThemeMusic(musicActive);
 
@@ -319,7 +319,7 @@ function Trivia({ game, sectors }: { game: any; sectors: Sector[] }) {
         confetti({ particleCount: 160, spread: 80, origin: { y: 0.5 }, colors: ['#ffcf63', '#eb9b2a', '#58a9ff', '#ffffff'] });
         playSfx(CORRECT_SOUND, 2);
       } else {
-        playSfx(BUZZER_SOUND, BUZZER_GAIN);
+        playSfx(WRONG_SOUND, 2);
       }
     }
   }, [game.current_question_id, game.winner_sector_id, game.last_award_correct]);
