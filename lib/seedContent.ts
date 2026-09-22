@@ -13,7 +13,7 @@ export const SEED_CONTENT: SeedContent = {
     { order_index: 3, question: "כמה צוותים נפתחו ונסגרו בענף בתקופתו של מוריס?", options: ["7", "6", "4", "5"], correct_index: 0 },
     { order_index: 4, question: "איזה שם אינו מופיע במשפחה המצומצמת של מוריס?", options: ["נועה", "אלי", "חוה", "אביב"], correct_index: 3 },
     { order_index: 5, question: "באיזה קצב מוריס רץ את הבר־אור בקצונה?", options: ["3:39 לק\"מ", "4:00 לק\"מ", "4:30 לק\"מ", "3:55 לק\"מ"], correct_index: 3 },
-    { order_index: 6, question: "באיזו עיר מוריס נולד?", options: ["חולון", "רחובות", "רמת גן", "פתח תקווה"], correct_index: 1 },
+    { order_index: 6, question: "באיזו עיר מוריס נולד?", options: ["חולון", "אשקלון", "רמת גן", "פתח תקווה"], correct_index: 1 },
     { order_index: 7, question: "איך כינו את מוריס בבה״ד 1?", options: ["מוריס", "יוסיין", "בן מוזס", "ביג M"], correct_index: 0 },
     { order_index: 8, question: "על כמה תחומים שונים היה מוריס אחראי לאורך הקריירה?", options: ["1", "2", "3", "4"], correct_index: 1 },
     { order_index: 9, question: "במה ואיפה עשה מוריס את התואר?", options: ["מדמ\"ח בפתוחה", "הנדסת חשמל בHIT בחולון", "הנדסת חשמל בMIT בקיימברידג'", "הנדסת חשמל בטכניון"], correct_index: 1 },
@@ -24,7 +24,7 @@ export const SEED_CONTENT: SeedContent = {
     { order_index: 14, question: "איזה ממונחי הבריין רוט הבאים נאמר באמת על ידי מוריס?", options: ["סיקס סבן", "לוק אין", "אורה פארמינג", "רק בפתח תקווה"], correct_index: 0 },
     { order_index: 15, question: "איזה ביטוי מוריס אומר הכי הרבה?", options: ["זה המתח", "אני המצאתי את ה%S", "זה לא אישי", "אני ו%S חברים ממש טובים למרות שגרטתי לו את הענף"], correct_index: 0 },
     { order_index: 16, question: "מה מוריס מתכנן לעשות באזרחות?", options: ["סטארטאפ עם מרקוס", "לצאת לטיול הגדול", "פוליטיקה", "לא יודע עדיין"], correct_index: 3 },
-    { order_index: 17, question: "באיזה צבע מברשת השיניים של מוריס?", options: ["כחול", "ירוק", "מברשת חשמלית מונעת בAI", "אפור"], correct_index: 0 },
+    { order_index: 17, question: "באיזה צבע מברשת השיניים של מוריס?", options: ["כחול", "ירוק", "מברשת שיניים חשמלית מונעת AI", "אפור"], correct_index: 2 },
     { order_index: 18, question: "מה המדור האהוב על מוריס?", options: ["458", "456", "452", "457 (תגלו עליו בשבוע הבא)"], correct_index: 0 },
   ],
   // "קרה או לא קרה" is transcribed from "קרה או לא קרה.xlsx"; is_true is that
@@ -49,7 +49,7 @@ export const SEED_CONTENT: SeedContent = {
   words: [
     { order_index: 1, word: "cooked" },
     { order_index: 2, word: "סוס טרויאני" },
-    { order_index: 3, word: "לימוד תורה" },
+    { order_index: 3, word: "הנקודה הארכימדית" },
     { order_index: 4, word: "חיננית" },
     { order_index: 5, word: "כמעיין המתגבר" },
   ],

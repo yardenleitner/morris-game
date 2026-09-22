@@ -57,6 +57,7 @@ function freshState(): StoreState {
     game: {
       id: 1,
       stage: 'title',
+      rules_for: null,
       round_id: randomUUID(),
       round_excluded: [],
       current_question_id: null,
@@ -130,6 +131,7 @@ function load(): StoreState {
     parsed.buzzSeq ??= 0;
     parsed.game.buzz_events ??= [];
     parsed.game.speech_result ??= null;
+    parsed.game.rules_for ??= null;
     holder.state = parsed;
   } catch {
     const fresh = freshState();
@@ -186,6 +188,7 @@ export const HOST_ACTIONS: Record<string, Handler> = {
     s.buzzWinners = {};
     Object.assign(s.game, {
       stage: 'title',
+      rules_for: null,
       round_id: randomUUID(),
       round_excluded: [],
       current_question_id: null,
@@ -214,6 +217,14 @@ export const HOST_ACTIONS: Record<string, Handler> = {
 
   host_set_stage(s, a) {
     s.game.stage = a.p_stage;
+  },
+
+  // Shown before every round now, not just the first — p_for is which round is
+  // about to start, so both /screen and /host know which rules to display and
+  // which "start" action the host's button should fire next.
+  host_show_rules(s, a) {
+    s.game.stage = 'rules';
+    s.game.rules_for = a.p_for;
   },
 
   host_new_round(s) {
@@ -257,8 +268,10 @@ export const HOST_ACTIONS: Record<string, Handler> = {
       revealed_is_true: null,
       round_id: randomUUID(),
       round_excluded: [],
-      timer_seconds: 15,
-      timer_ends_at: new Date(Date.now() + 15_000).toISOString(),
+      // No time limit on this round — every sector votes whenever it's ready, and
+      // the host reveals once everyone has (or gives up waiting).
+      timer_seconds: null,
+      timer_ends_at: null,
       winner_sector_id: null,
     });
   },

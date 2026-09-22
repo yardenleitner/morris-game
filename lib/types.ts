@@ -29,6 +29,11 @@ export type Stage = 'title' | 'boarding' | 'rules' | 'trivia' | 'truefalse' | 's
 export interface GameState {
   id: number;
   stage: Stage;
+  // Which round the rules currently on screen belong to. Only meaningful while
+  // stage === 'rules' — it's what tells both /host and /screen which round is
+  // about to start next, since 'rules' now fires before every round rather than
+  // once before the first.
+  rules_for: 'trivia' | 'truefalse' | 'speech' | null;
   round_id: string;
   round_excluded: string[];
 

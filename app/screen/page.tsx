@@ -1,6 +1,5 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
 import confetti from 'canvas-confetti';
 import { useLiveGame } from '@/lib/useLiveGame';
 import { IconTrophy, IconPlay, IconPause } from '@/lib/icons';
@@ -200,8 +199,6 @@ function TitleScreen() {
 }
 
 function BoardingScreen({ sectors }: { sectors: Sector[] }) {
-  const [url, setUrl] = useState('');
-  useEffect(() => { setUrl(`${window.location.origin}/play`); }, []);
   return (
     <main
       className="flex-1 flex flex-col items-center justify-center gap-8 p-10"
@@ -213,13 +210,8 @@ function BoardingScreen({ sectors }: { sectors: Sector[] }) {
     >
       <div className="text-center">
         <div className="text-sm font-extrabold text-[var(--gold)] tracking-widest">מי מכיר את מוריס?</div>
-        <h1 className="mt-1 text-3xl md:text-4xl font-extrabold">סרקו והצטרפו מהטלפון</h1>
+        <h1 className="mt-1 text-3xl md:text-4xl font-extrabold">מצטרפים מהטלפון...</h1>
       </div>
-      {url && (
-        <div className="bg-white p-3 rounded-2xl shadow-2xl">
-          <QRCodeSVG value={url} size={190} />
-        </div>
-      )}
       <div className="flex gap-4 flex-wrap justify-center max-w-4xl">
         {sectors.map((s) => (
           <div key={s.id} className="rounded-2xl px-5 py-4 text-center min-w-[150px]" style={{ background: '#0c1642cc', border: `2px ${s.connected ? 'solid' : 'dashed'} ${s.connected ? s.color : '#4d64aa'}` }}>
@@ -234,28 +226,30 @@ function BoardingScreen({ sectors }: { sectors: Sector[] }) {
 
 // Point values are read off the game row rather than written into the copy, so the
 // rules the room is shown can't drift from what scoring actually does.
+//
+// Shown before every round now (trivia / truefalse / speech), not once at the top
+// of the show — game.rules_for says which is coming, and giving each its own beat
+// on screen is what gives the room time to get ready before that round's buzzers
+// or votes actually open.
 function RulesScreen({ game }: { game: GameState }) {
   const plus = `+${game.scoring_correct}`;
   const minus = `${game.scoring_wrong}`;
-  const rules = [
-    { title: 'סבב טריוויה', body: `הבאזר נפתח עם כל שאלה. מי שלוחצ/ת ראשון/ה עונה בקול. תשובה נכונה: ${plus} נקודות. תשובה שגויה: ${minus} נקודות, והבאזר נפתח שוב לשאר המדורים.` },
-    { title: 'קרה / לא קרה', body: `כל מדור מצביע מהטלפון — "קרה" או "לא קרה" — לפני שנגמרות 15 השניות. אותו ניקוד: ${plus} על תשובה נכונה, ${minus} על תשובה שגויה.` },
-    { title: 'נאומי הפרידה · מילות מוקש', body: 'בסבב האחרון כל דובר/ת מקבל/ת מילה שחייבים לשלב בנאום בלי שישימו לב.' },
-  ];
+  const rules: Record<'trivia' | 'truefalse' | 'speech', { title: string; body: string }> = {
+    trivia: { title: 'סבב טריוויה', body: `הבאזר נפתח עם כל שאלה. מי שלוחצ/ת ראשון/ה עונה בקול. תשובה נכונה: ${plus} נקודות. תשובה שגויה: ${minus} נקודות, והבאזר נפתח שוב לשאר המדורים.` },
+    truefalse: { title: 'קרה / לא קרה', body: `כל מדור מצביע מהטלפון — "קרה" או "לא קרה". אותו ניקוד: ${plus} על תשובה נכונה, ${minus} על תשובה שגויה.` },
+    speech: { title: 'נאומי הפרידה · מילות מוקש', body: 'בסבב האחרון כל דובר/ת מקבל/ת מילה שחייבים לשלב בנאום בלי שישימו לב.' },
+  };
+  const round = rules[game.rules_for ?? 'trivia'];
   return (
     <main className="flex-1 flex flex-col items-center justify-center gap-8 p-10">
       <div className="text-center">
         <div className="text-sm font-extrabold text-[var(--gold)] tracking-widest">מי מכיר את מוריס?</div>
-        <h1 className="mt-1 text-3xl md:text-4xl font-extrabold">חוקי המשחק</h1>
+        <h1 className="mt-1 text-3xl md:text-4xl font-extrabold">בקרוב: {round.title}</h1>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-5xl w-full">
-        {rules.map((r) => (
-          <div key={r.title} className="rounded-2xl p-6" style={{ background: '#0c1642cc', border: '1px solid #4d64aa' }}>
-            <div className="font-black text-lg text-[var(--gold)] mb-2">{r.title}</div>
-            <p className="text-[var(--muted)] leading-relaxed">{r.body}</p>
-          </div>
-        ))}
+      <div className="rounded-2xl p-10 max-w-2xl w-full" style={{ background: '#0c1642cc', border: '1px solid #4d64aa' }}>
+        <p className="text-[var(--muted)] leading-relaxed text-center" style={{ fontSize: 'clamp(18px,2.2vw,26px)' }}>{round.body}</p>
       </div>
+      <p className="text-[var(--muted)] text-lg">התארגנו — מתחילים בעוד רגע</p>
     </main>
   );
 }

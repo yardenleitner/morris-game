@@ -7,20 +7,6 @@ import { SectorId, SECTOR_IDS } from '@/lib/types';
 
 const STORAGE_KEY = 'morris-sector';
 
-// ticks down against timer_ends_at so the true/false vote buttons can lock at 0,
-// even if the host hasn't clicked reveal yet.
-function useCountdown(endsAt: string | null) {
-  const [remaining, setRemaining] = useState<number | null>(null);
-  useEffect(() => {
-    if (!endsAt) { setRemaining(null); return; }
-    const tick = () => setRemaining(Math.max(0, Math.ceil((new Date(endsAt).getTime() - Date.now()) / 1000)));
-    tick();
-    const id = setInterval(tick, 250);
-    return () => clearInterval(id);
-  }, [endsAt]);
-  return remaining;
-}
-
 export default function PlayPage() {
   const { game, sectors, loading } = useLiveGame();
   const [mySector, setMySector] = useState<SectorId | null>(null);
@@ -28,7 +14,6 @@ export default function PlayPage() {
   const [pickedSector, setPickedSector] = useState<SectorId | null>(null);
   const [joining, setJoining] = useState(false);
   const [voted, setVoted] = useState(false);
-  const voteRemaining = useCountdown(game && game.stage === 'truefalse' ? game.timer_ends_at : null);
 
   const [storageChecked, setStorageChecked] = useState(false);
 
@@ -126,7 +111,6 @@ export default function PlayPage() {
   // looks: lit while the round is still there to win, calm once it is gone.
   const liveRound = game.buzzer_open && !game.buzzer_locked_by && !excluded;
   const alreadyVoted = game.current_votes[mySector] !== undefined;
-  const voteTimeUp = voteRemaining === 0;
 
   return (
     <main className="flex-1 flex flex-col" style={{ boxShadow: `inset 0 8px 0 ${me.color}` }}>
@@ -186,15 +170,8 @@ export default function PlayPage() {
       {!me.disqualified && game.stage === 'truefalse' && (
         <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6 text-center">
           <div className="bg-[#101b52] border border-[#526cbb] rounded-2xl px-5 py-4 text-lg leading-relaxed">{game.current_story_text}</div>
-          {voteRemaining !== null && (
-            <div className="text-2xl font-black" style={{ color: voteRemaining <= 5 ? '#ee6d75' : 'var(--gold)' }}>
-              00:{String(voteRemaining).padStart(2, '0')}
-            </div>
-          )}
           {alreadyVoted || voted ? (
             <p className="text-[var(--gold)] text-lg font-bold">ההצבעה נשלחה — ממתינים לשאר המדורים</p>
-          ) : voteTimeUp ? (
-            <p className="text-[var(--muted)] text-lg font-bold">הזמן נגמר — ממתינים לחשיפת התשובה</p>
           ) : (
             <div className="flex gap-3.5 w-full">
               <button

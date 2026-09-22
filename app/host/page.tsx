@@ -1,12 +1,13 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { QRCodeSVG } from 'qrcode.react';
 import { HOST_KEY } from '@/lib/config';
 import { hostAction as call } from '@/lib/actions';
 import { useLiveGame } from '@/lib/useLiveGame';
 import { IconCheck, IconX, IconPlay } from '@/lib/icons';
 import { ScoreBar, scoreScale } from '@/lib/ScoreBar';
-import { Stage, TriviaQuestion, TrueFalseStory, SpeechWord, SPEECH_ORDER, speakerForWordIndex } from '@/lib/types';
+import { GameState, Stage, TriviaQuestion, TrueFalseStory, SpeechWord, SPEECH_ORDER, speakerForWordIndex } from '@/lib/types';
 
 // Loading a question/story also opens the buzzer / starts the 15s timer and clears
 // the previous reveal (see the host_load_* RPCs) — one call does the whole "next" step.
@@ -72,9 +73,11 @@ export default function HostPage() {
 
       {game.stage === 'title' && <TitleStage />}
       {game.stage === 'boarding' && <BoardingStage sectors={sectors} />}
-      {game.stage === 'rules' && <RulesStage questions={questions} onUsed={loadContent} />}
-      {game.stage === 'trivia' && <TriviaControls game={game} questions={questions} stories={stories} sectors={sectors} onUsed={loadContent} />}
-      {game.stage === 'truefalse' && <TrueFalseControls game={game} stories={stories} words={words} onUsed={loadContent} />}
+      {game.stage === 'rules' && (
+        <RulesStage game={game} questions={questions} stories={stories} words={words} onUsed={loadContent} />
+      )}
+      {game.stage === 'trivia' && <TriviaControls game={game} questions={questions} sectors={sectors} onUsed={loadContent} />}
+      {game.stage === 'truefalse' && <TrueFalseControls game={game} stories={stories} onUsed={loadContent} />}
       {game.stage === 'speech' && <SpeechControls game={game} words={words} sectors={sectors} />}
       {(game.stage === 'leaderboard' || game.stage === 'end') && <EndControls stage={game.stage} />}
 
@@ -99,14 +102,23 @@ function TitleStage() {
 
 function BoardingStage({ sectors }: { sectors: any[] }) {
   const connectedCount = sectors.filter((s) => s.connected).length;
+  const [url, setUrl] = useState('');
+  useEffect(() => { setUrl(`${window.location.origin}/play`); }, []);
   return (
     <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div className="host-card p-6 flex flex-col">
-        <h2 className="text-lg font-bold text-[var(--gold)] mb-2">שלב רישום נציגים</h2>
-        <p className="text-[var(--muted)] text-sm">המסך הגדול מציג QR להצטרפות. אשר שכולם התחברו ואז התחל את המשחק.</p>
-        <div className="mt-auto pt-4 flex flex-col gap-3">
-          <div className="btn done justify-center flex items-center gap-2"><IconCheck />רישום פתוח — מוצג במסך</div>
-          <button onClick={() => call('host_set_stage', { p_stage: 'rules' })} className="btn gold text-lg py-4 flex items-center justify-center gap-2">
+      <div className="host-card p-6 flex flex-col items-center text-center gap-3">
+        <h2 className="text-lg font-bold text-[var(--gold)]">שלב רישום נציגים</h2>
+        <p className="text-[var(--muted)] text-sm">הראו את הקוד הזה לנציגים כדי שיצטרפו מהטלפון.</p>
+        {url && (
+          <div className="bg-white p-3 rounded-2xl shadow-2xl">
+            <QRCodeSVG value={url} size={170} />
+          </div>
+        )}
+        <div className="mt-auto pt-4 w-full flex flex-col gap-3">
+          <button
+            onClick={() => call('host_show_rules', { p_for: 'trivia' })}
+            className="btn gold text-lg py-4 flex items-center justify-center gap-2"
+          >
             התחל את המשחק <IconPlay />
           </button>
         </div>
@@ -129,13 +141,35 @@ function BoardingStage({ sectors }: { sectors: any[] }) {
   );
 }
 
-function RulesStage({ questions, onUsed }: { questions: TriviaQuestion[]; onUsed: () => void }) {
+// Fires before every round now (trivia / truefalse / speech), not just once at
+// the top of the show — game.rules_for says which round is coming, so this picks
+// the right blurb and the right "start" call.
+const RULES_STAGE_COPY: Record<'trivia' | 'truefalse' | 'speech', { blurb: string; cta: string }> = {
+  trivia: { blurb: 'הקהל רואה את חוקי סבב הטריוויה. כשמוכנים, התחילו את השאלה הראשונה — הבאזרים ייפתחו אוטומטית.', cta: 'התחל טריוויה' },
+  truefalse: { blurb: 'הקהל רואה את חוקי סבב קרה / לא קרה. כשמוכנים, התחילו את הסיפור הראשון.', cta: 'התחל קרה / לא קרה' },
+  speech: { blurb: 'הקהל רואה את חוקי שלב נאומי הפרידה. כשמוכנים, התחילו את הנואם/ת הראשון/ה.', cta: 'התחל נאומי פרידה' },
+};
+
+function RulesStage({
+  game, questions, stories, words, onUsed,
+}: {
+  game: GameState; questions: TriviaQuestion[]; stories: TrueFalseStory[]; words: SpeechWord[]; onUsed: () => void;
+}) {
+  const forStage = game.rules_for ?? 'trivia';
+  const copy = RULES_STAGE_COPY[forStage];
+
+  const start = () => {
+    if (forStage === 'trivia') return loadNextQuestion(questions, onUsed);
+    if (forStage === 'truefalse') return loadNextStory(stories, onUsed);
+    return loadNextWord(game, words);
+  };
+
   return (
     <section className="host-card p-8 flex flex-col items-center gap-4 text-center">
       <h2 className="text-xl font-bold text-[var(--gold)]">חוקי המשחק מוקרנים כרגע</h2>
-      <p className="text-[var(--muted)] max-w-md">הקהל רואה את חוקי המשחק. כשמוכנים, התחילו את שאלת הטריוויה הראשונה — הבאזרים ייפתחו אוטומטית.</p>
-      <button onClick={() => loadNextQuestion(questions, onUsed)} className="btn gold text-lg px-8 py-4">
-        התחל טריוויה <IconPlay />
+      <p className="text-[var(--muted)] max-w-md">{copy.blurb}</p>
+      <button onClick={start} className="btn gold text-lg px-8 py-4">
+        {copy.cta} <IconPlay />
       </button>
     </section>
   );
@@ -155,7 +189,7 @@ function EndControls({ stage }: { stage: Stage }) {
 // Trivia: the host's only real decisions are "who buzzed, were they right" and,
 // once resolved, when to move on. Buzzer open/close, timers and manual question
 // picking are all handled automatically now — nothing left for the host to fiddle with.
-function TriviaControls({ game, questions, stories, sectors, onUsed }: any) {
+function TriviaControls({ game, questions, sectors, onUsed }: any) {
   // current question's own order_index, not a count derived from `used` — `used` flips
   // the instant an answer is scored, before "Next Question" is clicked, which would
   // otherwise show the wrong number while still displaying that question's result.
@@ -166,7 +200,7 @@ function TriviaControls({ game, questions, stories, sectors, onUsed }: any) {
   const awardedSector = sectors.find((s: any) => s.id === game.winner_sector_id);
 
   const advance = () =>
-    noMoreQuestions ? loadNextStory(stories, onUsed) : loadNextQuestion(questions, onUsed);
+    noMoreQuestions ? call('host_show_rules', { p_for: 'truefalse' }) : loadNextQuestion(questions, onUsed);
 
   return (
     <section className="host-card p-6 flex flex-col items-center gap-4 text-center">
@@ -203,13 +237,13 @@ function TriviaControls({ game, questions, stories, sectors, onUsed }: any) {
 
 // True/false: same idea — the host just reveals when ready and moves on. The 15s
 // timer starts itself when the story loads and locks the phones automatically.
-function TrueFalseControls({ game, stories, words, onUsed }: any) {
+function TrueFalseControls({ game, stories, onUsed }: any) {
   const currentStory = stories.find((s: TrueFalseStory) => s.id === game.current_story_id);
   const noMoreStories = stories.length > 0 && stories.every((s: TrueFalseStory) => s.used);
   const revealed = game.revealed_is_true !== null;
 
   const advance = () =>
-    noMoreStories ? loadNextWord(game, words) : loadNextStory(stories, onUsed);
+    noMoreStories ? call('host_show_rules', { p_for: 'speech' }) : loadNextStory(stories, onUsed);
 
   return (
     <section className="host-card p-6 flex flex-col items-center gap-4 text-center">
