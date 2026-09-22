@@ -27,12 +27,20 @@ export const SEED_CONTENT: SeedContent = {
     { order_index: 17, question: "באיזה צבע מברשת השיניים של מוריס?", options: ["כחול", "ירוק", "מברשת חשמלית מונעת בAI", "אפור"], correct_index: 0 },
     { order_index: 18, question: "מה המדור האהוב על מוריס?", options: ["458", "456", "452", "457 (תגלו עליו בשבוע הבא)"], correct_index: 0 },
   ],
+  // "קרה או לא קרה" is transcribed from "קרה או לא קרה.xlsx"; is_true is that
+  // row's "קרה/לא קרה" column, so the sheet stays the answer key. The round runs
+  // until every story is used, so the length here is the length of the round.
   stories: [
-    { order_index: 1, story: "מוריס פעם ענה לטלפון באמצע ריצת 10 ק\"מ ולא האט את הקצב.", is_true: true },
-    { order_index: 2, story: "מוריס זכה פעם בתחרות שירה בקריוקי של היחידה.", is_true: true },
-    { order_index: 3, story: "מוריס גידל פעם שפם למשך שנה שלמה בלי שאף אחד שם לב.", is_true: false },
-    { order_index: 4, story: "מוריס הגיע פעם לעבודה עם שתי נעליים לא תואמות ולא שם לב עד הצהריים.", is_true: true },
-    { order_index: 5, story: "מוריס פעם שכח את שם הכלב שלו בטופס רשמי.", is_true: false },
+    { order_index: 1, story: "כשמוריס ואלי היו ילדים, הם עצרו בצומת הערבה בדרך לאילת. מוריס יצא להשתין וכשטס מעליו מטוס קרב הוא נבהל והשתטח על הרצפה.", is_true: true },
+    { order_index: 2, story: "בגיל 16 מוריס זכה במקום השלישי בארץ בתחרות ריצת 100 מטר.", is_true: true },
+    { order_index: 3, story: "פעם מוריס וחוה נתקעו במעלית בקניון רחובות לחצי שעה ומאז הוא עולה רק במדרגות.", is_true: false },
+    { order_index: 4, story: "כשמוריס היה בן 7 הוא טיפס על עץ בחצר כדי להביא כדור ונתקע בו ל45 דקות.", is_true: false },
+    { order_index: 5, story: "בכיתה  ג זכה מוריס בתחרות ציורים שהגיעה לנשיא עזר ויצמן וקיבל ממנו מכתב הערכה.", is_true: true },
+    { order_index: 6, story: "בעם כלביא שמעתי את מוריס אומר בטלפון \"חוה תהרוג אותי עם החדא הזה, הם רוצים שאני אשמין פה!\"", is_true: false },
+    { order_index: 7, story: "במהלך 10 שנות שירות, מוריס עבר דירה 6 פעמים", is_true: true },
+    { order_index: 8, story: "פעם אחת מוריס התערב עם אלי שהוא יכול לאכול עשר ביצים קשות ברצף. הוא אכל שבע, הקיא והתעקש שהוא ניצח.", is_true: false },
+    { order_index: 9, story: "פעם שגיא מנור עלה לקומה למעלה בעליבאבא ואמר למייקי שיש לו דיון. מוריס ענה בתגובה \"דיון אה?\"", is_true: true },
+    { order_index: 10, story: "כשחוה ומוריס היו צעירים, הם הלכו ללונה פארק. כשרכבת ההרים רק התחילה לזוז, מוריס התחיל לצרוח בצורה כל כך קיצונית שכל הקרון צחק ממנו. כשירדו מהמתקן מוריס סירב לעלות לעוד מתקנים והם נאלצו לחזור הביתה.", is_true: true },
   ],
   // Mine words are transcribed from "מילות מוקש.xlsx". One word per sector, in
   // SPEECH_ORDER: word 1 goes to 452, word 2 to 454, and so on — which is the same
