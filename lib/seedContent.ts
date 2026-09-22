@@ -34,13 +34,15 @@ export const SEED_CONTENT: SeedContent = {
     { order_index: 4, story: "מוריס הגיע פעם לעבודה עם שתי נעליים לא תואמות ולא שם לב עד הצהריים.", is_true: true },
     { order_index: 5, story: "מוריס פעם שכח את שם הכלב שלו בטופס רשמי.", is_true: false },
   ],
-  // One word per sector, in SPEECH_ORDER: word 1 goes to 452, word 2 to 454, and
-  // so on. Adding a sixth would simply never come up.
+  // Mine words are transcribed from "מילות מוקש.xlsx". One word per sector, in
+  // SPEECH_ORDER: word 1 goes to 452, word 2 to 454, and so on — which is the same
+  // pairing the sheet's "שחקן" column spells out. Adding a sixth would simply
+  // never come up.
   words: [
-    { order_index: 1, word: "ענף" },
-    { order_index: 2, word: "משאבים" },
-    { order_index: 3, word: "שיבר" },
-    { order_index: 4, word: "7170" },
-    { order_index: 5, word: "קלוד קוד" },
+    { order_index: 1, word: "cooked" },
+    { order_index: 2, word: "סוס טרויאני" },
+    { order_index: 3, word: "לימוד תורה" },
+    { order_index: 4, word: "חיננית" },
+    { order_index: 5, word: "כמעיין המתגבר" },
   ],
 };
